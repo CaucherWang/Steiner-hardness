@@ -40,7 +40,7 @@ We provide the code to build NSW, HNSW, MRNG, SSG, and $\tau$-MG indexes.
 You can use `script/index_nsw.sh`, `script/index_hnsw.sh`, and `script/index_mrng.sh`
 
 #### 1.2 compute the ME of queries
-We use $ME_{\delta_0}^p@Acc-exhaustive$ as the definition of Minimum Effort (ME) of queries.
+We use $ME_{\delta_0}^p\@Acc-exhaustive$ as the definition of Minimum Effort (ME) of queries.
 To obtain this, the first step is to compute $\delta_0$ and the second is to compute ME with $\delta_0$.
 To compute $\delta_0$, a prerequiste is to find sufficient nearest neighbors of all the dataset points, which can be done by faiss-CPU or faiss-GPU. You can use `python-script/ground_truth.py` to achieve this. Other EXACT kNN methods are also OK.
 To get the revsersed graph, use `python-script/get_rev_graph.py`.
