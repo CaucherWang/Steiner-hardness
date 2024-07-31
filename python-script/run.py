@@ -256,9 +256,9 @@ def build_benchmark(source_directory, data_directory, paths, dataset_name, param
             generate_workload(paths, params['workloads_size'], postfix)
 
 def main():
-    parser = argparse.ArgumentParser(description="多功能脚本")
-    parser.add_argument("--command", required=True, help="功能名称（preprocess, hardness, benchmark, all）")
-    parser.add_argument("--config-file", required=True, help="配置文件路径")
+    parser = argparse.ArgumentParser(description="run the pipeline")
+    parser.add_argument("--command", required=True, help="command to run", choices=["preprocess", "hardness", "benchmark", "all"])
+    parser.add_argument("--config-file", required=True, help="config file path")
     args = parser.parse_args()
 
     config = load_config(args.config_file)
