@@ -33,7 +33,7 @@ Ensure you have the following datasets ready:
 
 ### 2. Configure Settings
 
-Edit the `config.py` file to set your configurations.
+Edit the `python-script/config.py` file to set your configurations.
 
 ### 3. Execute the Script
 
