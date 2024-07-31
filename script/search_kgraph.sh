@@ -34,7 +34,29 @@ g++ ./src/search_kgraph.cpp -O3 -o ./src/search_kgraph -I ./src -ffast-math -mar
 
 # ./src/search_kgraph -d ${randomize} -n ${data} -i ${index} -q ${query} -g ${gnd} -r ${res} -t ${trans} -k ${k}
 cd src
-./search_kgraph
+
+# for recall in 0.94 0.98
+# do
+#     for k in 25 # 20 50 100 200 500
+#     do
+#         dataset="gist"
+#         ./search_kgraph -r ${recall} -k ${k} -d ${dataset} >> ${dataset}.out & #-e ${ef} -m ${M} 
+#         dataset="rand100"
+#         ./search_kgraph -r ${recall} -k ${k} -d ${dataset} >> ${dataset}.out &
+#         dataset="glove-100"
+#         ./search_kgraph -r ${recall} -k ${k} -d ${dataset} >> ${dataset}.out &
+#     done
+# done
+
+dataset="deep"
+# dataset="glove-100"
+# dataset="gist"
+# dataset="rand100"
+
+for recall in 0.42
+do
+    ./search_kgraph -r ${recall} -k 50 -d ${dataset} >> ${dataset}.out &
+done
 
 echo "done"
 

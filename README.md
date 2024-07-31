@@ -22,6 +22,66 @@ In such cases, even though the average query performance is good, users may suff
 * openmp
 
 ---
+
+## One-Stop Script Usage Guide
+
+### 1. Prepare the Datasets
+
+Ensure you have the following datasets ready:
+- `base.fvecs`
+- `query.fvecs`
+
+### 2. Configure Settings
+
+Edit the `python-script/config.py` file to set your configurations.
+
+### 3. Execute the Script
+
+Navigate to the `python-script` folder and run the script to execute all steps in sequence:
+
+```bash
+cd python-script
+python run.py --command all --config-file config.py
+```
+
+#### Running Individual Steps
+
+You can also run each step individually:
+
+##### Preprocessing:
+
+```bash
+python run.py --command preprocess --config-file config.py
+```
+
+This step includes:
+- Generating kgraph using `efanna` library
+- Generating `mrng`
+- Calculating the reverse graph of `mrng`
+- Sampling and training the GMM model
+
+##### Calculating Hardness:
+
+```bash
+python run.py --command hardness --config-file config.py
+```
+
+This step includes:
+- Constructing the groundtruth
+- Calculating hardness
+
+##### Calculating Benchmark:
+
+```bash
+python run.py --command benchmark --config-file config.py
+```
+
+This step includes:
+- Constructing the groundtruth for benchmark
+- Calculating the required ME for the benchmark
+- Constructing the benchmark
+
+---
 ## Build
 There are many entries in this project.
 You can build them directly with g++ 9 or higher.

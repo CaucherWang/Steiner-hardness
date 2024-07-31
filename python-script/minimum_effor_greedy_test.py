@@ -1,15 +1,9 @@
-import queue
-from turtle import circle
 from requests import get
-from sklearn.utils import deprecated
 from utils import *
-from queue import PriorityQueue
 import os
-from unionfind import UnionFind
 import matplotlib.pyplot as plt
 from matplotlib.colors import LinearSegmentedColormap
 import mpl_scatter_density # adds projection='scatter_density'
-
 
 fig = plt.figure(figsize=(6,4.8))
 
@@ -26,105 +20,216 @@ def resolve_temp_log(file_path):
             queries.append(int(eles[3]))
             mes.append(int(eles[5]))
         return queries, mes
-
-def get_density_scatter(k_occur, lid):
-    x = k_occur
-    y = lid
-    corr = np.corrcoef(x, y)[0, 1]
-    x = np.array(x) / 100
-    y = np.array(y) / 1000
-    # x = np.log2(x)
-    # y = np.array([np.log2(i) if i > 0 else i for i in y])
-    # y = np.log(n_rknn)
-    print(np.max(x), np.max(y))
-    print(np.average(x), np.average(y))
-
-    colors = [
-        (0, "#ffffff"),  # white
-        (1e-20, "#add8e6"),  # light blue
-        (0.3, "#0000ff"),  # blue
-        (0.6, "#00008b"),  # dark blue
-        (1, "#000000"),  # black
-    ]
-    white_viridis = LinearSegmentedColormap.from_list('white_viridis', colors, N=256)
-        
-
-    fig = plt.figure(figsize=(11,8.2))
-    ax = fig.add_subplot(1, 1, 1, projection='scatter_density')
-    density = ax.scatter_density(x, y, cmap='RdBu_r', extent=[0, 40, 0, 20000])
-    density.set_clim(0, 30)
-    cbar = fig.colorbar(density)
-    cbar.set_label('#points per pixel', fontsize = 52)
-    cbar.ax.tick_params(labelsize=52)
-    # plt.xlabel('k-occurrence (500)')
-    # plt.xlabel('Query difficulty')
-    # ax.set_xlabel(r'$ME_{\delta_0}^{0.86}$-$exhaustive$ ($10^3$)', fontsize=52)
-    ax.set_xlabel(r'$\epsilon$-effort ($10^2$)', fontsize=52)
-    # plt.xlabel('reach_delta_0_rigorous')
-    # plt.xlabel('metric for dynamic bound')
-    # plt.xlabel('delta_0')
-    # plt.xlabel(r'$K_0^{0.96}@0.98$')
-    # plt.xlabel(r'$\delta_0^{\forall}-g@0.98$')
-    # plt.xlabel(r'$\Sigma ME^{0.96}_{\delta_0}$@0.98')
-    # plt.xlabel(r'$ME^{0.96}_{\delta_0}$@0.98-exhausted (MRNG)')
-    # plt.xlabel(r'$ME^{0.86}_{\delta_0}$@0.98-exhausted (MRNG)')
-    # plt.xlabel(r'$Area(ME^{0.96}_{\delta_0}$@0.98)-Interpolation')
-    # plt.xlabel(r'$Area(ME^{0.96}_{\delta_0}$@0.98)-Regression')
-    # plt.xlabel(r'$ME^{0.96}_{\delta_0}$@0.98')
-    # plt.xlabel(r'$Kgraph-100-\hat{ME^{0.96}_{\delta_0}}$@0.90-exhausted')
-    # plt.xlabel(r'$ME^{\forall}_{\delta_0}-reach$@0.98')
-    # ax.set_ylabel(r'Least NDC ($10^3$)', fontsize=52)
-    # plt.ylabel(r'KGraph(100) $LQC_{50}^{0.98}$')
-    # plt.xlabel('local intrinsic dimensionality')
-    # plt.ylabel(r'HNSW(32) $LQC_{50}^{0.98}$')
-    # plt.ylabel('1NN distance')
-    # plt.tight_layout()
-    # plt.xlim(0, 1.5*1e7)
-    ax.set_xlim(0,15)
-    ax.set_ylim(0,15)
-    plt.xticks(size = 52)
-    plt.yticks(size = 52)
-    plt.xticks([0,5,10,15], ['0', '5', '10', '15'], size=52)
-    # plt.xticks([0,10000,20000,30000], ['0', '10', '20', '30'], size=54)
-    # plt.yticks([0,10000,20000,30000, 40000],['0', '10', '20', '30', '40'], size=50)
-    # plt.xticks([0,5000,10000,15000], ['0', '5', '10', '15'], size=54)
-    # plt.yticks([0, 5000, 10000, 15000, 20000],['0', '5', '10', '15', '20'], size=54)
-    # plt.xticks([0,5000,10000], ['0', '5', '10'], size=54)
-    # plt.xticks([0,2500,5000,7500], ['0', '2.5', '5', '7.5'], size=54)
-    # plt.yticks([0, 5000, 10000],['0', '5', '10'], size=54)
-
-    plt.text(0.26, 0.9, f'corr={corr:.3f}', color='red', fontsize=60, horizontalalignment='left', verticalalignment='top', transform=fig.transFigure)
-
     
-    plt.tight_layout()
-    
-    # plt.savefig(f'./figures/{dataset}/{dataset}-query-k_occurs-lid-scatter.png')
-    # print(f'save to figure ./figures/{dataset}/{dataset}-query-k_occurs-lid-scatter.png')
-    # plt.savefig(f'./figures/{dataset}/{dataset}-query-k-occur-1NN-dist.png')
-    # print(f'save to figure ./figures/{dataset}/{dataset}-query-k-occur-1NN-dist.png')
+def plot_scatter(x, y, title="Scatter Plot", xlabel="X", ylabel="Y"):
+    """
+    绘制 x-y 的散点图。
+
+    Args:
+        x (array-like): X 轴数据。
+        y (array-like): Y 轴数据。
+        title (str, optional): 图的标题。默认为 "Scatter Plot"。
+        xlabel (str, optional): X 轴标签。默认为 "X"。
+        ylabel (str, optional): Y 轴标签。默认为 "Y"。
+    """
+    threshold_x = 30000
+    threshold_y = 30000
+    mask = np.logical_and(x <= threshold_x, y <= threshold_y)
+    x_filtered = np.array(x)[mask]
+    y_filtered = np.array(y)[mask]
+
+    correlation = np.corrcoef(x_filtered, y_filtered)[0, 1]
+    print(f"Correlation coefficient between x_filtered and y_filtered: {correlation:.3f}")
+
+    plt.figure(figsize=(16, 12))
+    plt.scatter(x_filtered, y_filtered, marker='o', color='b', alpha=0.5)
+    plt.title(title)
+    plt.xlabel(xlabel)
+    plt.ylabel(ylabel)
+    plt.grid(True)
     plt.savefig(f'./figures/{dataset}/{dataset}-query-difficulty.png')
     print(f'save to figure ./figures/{dataset}/{dataset}-query-difficulty.png')
 
+# white_viridis = LinearSegmentedColormap.from_list('white_viridis', [
+#     (0, '#ffffff'),
+#     (1e-20, '#440053'),
+#     (0.2, '#404388'),
+#     (0.4, '#2a788e'),
+#     (0.6, '#21a784'),
+#     (0.8, '#78d151'),
+#     (1, '#fde624'),
+# ], N=256)
 
+
+white_viridis = LinearSegmentedColormap.from_list('white_viridis', [
+        (0, "#ffffff"),  # 蓝色（最低密度）
+        (1e-20, "#0000ff"),  # 蓝色（最低密度）
+        (0.5, "#ffffff"),  # 白色（中间密度）
+        (1, "#ff0000")  # 红色（最高密度）
+    ], N=256)
+
+def using_mpl_scatter_density(figure, x, y):
+    ax = figure.add_subplot(1, 1, 1, projection='scatter_density')
+    density = ax.scatter_density(x, y, cmap=white_viridis)
+    figure.colorbar(density, label='#points per pixel')
+
+def get_density_scatter(x, y, title="Scatter Plot", xlabel="X", ylabel="Y"):
+    # def calculate_zscore(data):
+    #     mean = np.mean(data)
+    #     std = np.std(data)
+    #     z_scores = (data - mean) / std
+    #     return z_scores
+    # z_scores_y = calculate_zscore(y)
+    # threshold = 1
+    percentile_y = np.percentile(y, 97)
+    std_y = np.std(y)
+    mean_y = np.mean(y)
+    mask = y < percentile_y
+    if np.max(y) <= mean_y + std_y: # 分布较为集中
+        mask = np.ones_like(y, dtype=bool)
+    else: # 分布较为分散
+        # mask = np.logical_and(y < 100000, x < 40000)
+        # mask = y < 600000
+        mask = x < 49000
+
+    # mask = np.abs(y - np.mean(y)) <= std_y
+    # mask = np.abs(z_scores_y) <= threshold
+    # x = np.array(x)[mask]
+    # y = np.array(y)[mask]
+
+    print(np.max(x), np.max(y))
+    def calculate_adjusted_limits(data, margin_ratio=0.05):
+        min_val, max_val = np.min(data), np.max(data)
+        range_val = max_val - min_val
+        return min_val - range_val * margin_ratio, max_val + range_val * margin_ratio
+
+
+    fig = plt.figure(figsize=(11, 8.2))
+    using_mpl_scatter_density(fig, x, y)
+    plt.title(title)
+    plt.xlabel(xlabel)
+    plt.ylabel(ylabel)
+
+    x_min, x_max = calculate_adjusted_limits(x)
+    y_min, y_max = calculate_adjusted_limits(y)
+    plt.xlim(x_min, x_max)
+    plt.ylim(y_min, y_max)
+
+    # plt.plot([x_min, x_max], [x_min, x_max], 'k--', linewidth=1)
+    corr = np.corrcoef(x, y)[0, 1]
+    plt.text(0, 1, f'corr={corr:.3f}', color='red', fontsize=20, horizontalalignment='left', verticalalignment='top', transform=fig.transFigure)
+    plt.tight_layout()
+
+    plt.savefig(f'./figures/{dataset}/{title}.png')
+    print(f'save to figure ./figures/{dataset}/{title}.png')
+
+# def get_density_scatter(k_occur, lid, title="Scatter Plot"):
+#     x = k_occur
+#     y = lid
+
+#     print(x.shape, y.shape)
+
+#     corr = np.corrcoef(x, y)[0, 1]
+#     x = np.array(x) / 100
+#     y = np.array(y) / 1000
+#     # x = np.log2(x)
+#     # y = np.array([np.log2(i) if i > 0 else i for i in y])
+#     # y = np.log(n_rknn)
+#     print(np.max(x), np.max(y))
+#     print(np.average(x), np.average(y))
+
+#     # colors = [
+#     #     (0, "#ffffff"),  # white
+#     #     (1e-20, "#add8e6"),  # light blue
+#     #     (0.3, "#0000ff"),  # blue
+#     #     (0.6, "#00008b"),  # dark blue
+#     #     (1, "#000000"),  # black
+#     # ]
+#     # white_viridis = LinearSegmentedColormap.from_list('white_viridis', colors, N=256)
+        
+
+#     fig = plt.figure(figsize=(11, 8.2))
+#     ax = fig.add_subplot(1, 1, 1, projection='scatter_density')
+#     # density = ax.scatter_density(x, y, cmap='RdBu_r', extent=[0, 40, 0, 20000])
+#     density = ax.scatter_density(x, y, cmap='RdBu_r', extent=[0, 40, 0, 20000])
+#     density.set_clim(0, 30)
+#     cbar = fig.colorbar(density)
+#     cbar.set_label('#points per pixel', fontsize = 52)
+#     cbar.ax.tick_params(labelsize=52)
+#     # plt.xlabel('k-occurrence (500)')
+#     # plt.xlabel('Query difficulty')
+#     # ax.set_xlabel(r'$ME_{\delta_0}^{0.86}$-$exhaustive$ ($10^3$)', fontsize=52)
+#     ax.set_xlabel(r'$\epsilon$-effort ($10^2$)', fontsize=52)
+#     # plt.xlabel('reach_delta_0_rigorous')
+#     # plt.xlabel('metric for dynamic bound')
+#     # plt.xlabel('delta_0')
+#     # plt.xlabel(r'$K_0^{0.96}@0.98$')
+#     # plt.xlabel(r'$\delta_0^{\forall}-g@0.98$')
+#     # plt.xlabel(r'$\Sigma ME^{0.96}_{\delta_0}$@0.98')
+#     # plt.xlabel(r'$ME^{0.96}_{\delta_0}$@0.98-exhausted (MRNG)')
+#     # plt.xlabel(r'$ME^{0.86}_{\delta_0}$@0.98-exhausted (MRNG)')
+#     # plt.xlabel(r'$Area(ME^{0.96}_{\delta_0}$@0.98)-Interpolation')
+#     # plt.xlabel(r'$Area(ME^{0.96}_{\delta_0}$@0.98)-Regression')
+#     # plt.xlabel(r'$ME^{0.96}_{\delta_0}$@0.98')
+#     # plt.xlabel(r'$Kgraph-100-\hat{ME^{0.96}_{\delta_0}}$@0.90-exhausted')
+#     # plt.xlabel(r'$ME^{\forall}_{\delta_0}-reach$@0.98')
+#     # ax.set_ylabel(r'Least NDC ($10^3$)', fontsize=52)
+#     # plt.ylabel(r'KGraph(100) $LQC_{50}^{0.98}$')
+#     # plt.xlabel('local intrinsic dimensionality')
+#     # plt.ylabel(r'HNSW(32) $LQC_{50}^{0.98}$')
+#     # plt.ylabel('1NN distance')
+#     # plt.tight_layout()
+#     # plt.xlim(0, 1.5*1e7)
+    
+#     ax.set_facecolor('white')
+#     ax.set_xlim(0, 50)    
+#     ax.set_ylim(0, 30)
+    
+#     plt.xticks(size=30)
+#     plt.yticks(size=30)
+#     # plt.xticks(size = 52)
+#     # plt.yticks(size = 52)
+#     # plt.xticks([0,5,10,15], ['0', '5', '10', '15'], size=52)
+#     # plt.xticks([0,10000,20000,30000], ['0', '10', '20', '30'], size=54)
+#     # plt.yticks([0,10000,20000,30000, 40000],['0', '10', '20', '30', '40'], size=50)
+#     # plt.xticks([0,5000,10000,15000], ['0', '5', '10', '15'], size=54)
+#     # plt.yticks([0, 5000, 10000, 15000, 20000],['0', '5', '10', '15', '20'], size=54)
+#     # plt.xticks([0,5000,10000], ['0', '5', '10'], size=54)
+#     # plt.xticks([0,2500,5000,7500], ['0', '2.5', '5', '7.5'], size=54)
+#     # plt.yticks([0, 5000, 10000],['0', '5', '10'], size=54)
+
+#     plt.text(0.26, 0.9, f'corr={corr:.3f}', color='red', fontsize=60, horizontalalignment='left', verticalalignment='top', transform=fig.transFigure)
+
+    
+#     plt.tight_layout()
+    
+#     # plt.savefig(f'./figures/{dataset}/{dataset}-query-k_occurs-lid-scatter.png')
+#     # print(f'save to figure ./figures/{dataset}/{dataset}-query-k_occurs-lid-scatter.png')
+#     # plt.savefig(f'./figures/{dataset}/{dataset}-query-k-occur-1NN-dist.png')
+#     # print(f'save to figure ./figures/{dataset}/{dataset}-query-k-occur-1NN-dist.png')
+#     plt.savefig(f'./figures/{dataset}/{title}.png')
+#     print(f'save to figure ./figures/{dataset}/{title}.png')
 
 def resolve_performance_variance_log(file_path):
     print(f'read {file_path}')
     with open(file_path, 'r') as f:
         lines = f.readlines()
         ndcs = []
+        lines.reverse() # reverse the lines
         for line in lines:
             if(len(line) < 30):
                 continue
             line = line.strip()
             ndcs = line[:-1].split(',')
             ndcs = [int(x) for x in ndcs]
-        return ndcs
+            return ndcs
       
 def resolve_performance_variance_log_multi(file_path):
     print(f'read {file_path}')
     with open(file_path, 'r') as f:
         lines = f.readlines()
         ndcs = []
+        lines.reverse() # reverse the lines
         for line in lines:
             if(len(line) < 30):
                 continue
@@ -132,7 +237,7 @@ def resolve_performance_variance_log_multi(file_path):
             ndc = line[:-1].split(',')
             ndc = [int(x) for x in ndc]
             ndcs.append(ndc)
-        return ndcs
+            return ndcs
     
 
 params = {
@@ -142,10 +247,10 @@ params = {
     # 0.86 -> 0.86
     'rand100': {'M': 100, 'ef': 2000, 'L': 500, 'R': 200, 'C': 1000, 'Kbuild':500, 
                 'tau':2,'KMRNG':9999, 
-                'recall':0.94 ,'prob':0.86, 'k':50},
+                'recall':0.94 ,'prob':0.86, 'k':100},
     'glove-100': {'M': 60, 'ef': 1000, 'L': 150, 'R': 90, 'C': 600, 'Kbuild':500, 
              'tau':1, 'KMRNG':2047, 'd':30,
-             'recall':0.90,'k':50,
+             'recall':0.94,'k':100,'prob': 0.86,
              'rp':{
                     0.86: {
                         50:{
@@ -175,15 +280,15 @@ params = {
              'recall':0.98, 'prob':0.86, 'k': 50}, 
     'gist': {'M': 32, 'ef': 1000, 'L': 100, 'R': 64, 'C': 1000, 'Kbuild':500, 
              'tau':0.06, 'KMRNG':2047, 
-             'recall':0.98,'prob':0.98, 'k':100}, 
+             'recall':0.94,'prob':0.98, 'k':100}, 
     'sift': {'M': 16, 'ef': 500, 'L': 50, 'R': 32, 'C': 500, 'recall':0.98},
 }
 
-source = './data/'
-result_source = './results/'
-dataset = 'deep'
-select = 'hnsw'
-exp = 'epsilon'
+source = '../data/'
+result_source = '../results/'
+dataset = 'glove-100'
+select = 'kgraph'
+exp = 'steiner' # 'lid', 'qe', 'epsilon', 'steiner'
 idx_postfix = '_plain'
 Kbuild = params[dataset]['Kbuild']
 M = params[dataset]['M']
@@ -193,7 +298,7 @@ L = params[dataset]['L']
 C = params[dataset]['C']
 k = params[dataset]['k']
 tau = params[dataset]['tau']
-d = params[dataset]['d']
+# d = params[dataset]['d']
 KMRNG = params[dataset]['KMRNG']
 target_recall = params[dataset]['recall']
 target_prob = params[dataset]['prob']
@@ -358,6 +463,7 @@ if __name__ == "__main__":
             f'{dataset}_taumng_k{k}_L{L}_R{R}_C{C}_tau{tau}_perform_variance{target_recall:.2f}.log')))
         query_performance = nsg_query_performance_recall
     elif select == 'deg':
+        d = params[dataset]['d']
         if exp == 'steiner':
             me_delta0_path = os.path.join(source, dataset, f'{dataset}_me_exhausted_forall_point_recall{target_recall:.2f}_prob{target_prob:.2f}'
                                         f'_k{k}_d{d}.ibin_deg')
@@ -391,7 +497,8 @@ if __name__ == "__main__":
     # plt.tight_layout()
     # plt.savefig(f'./figures/{dataset}/{dataset}-me-exhausted-ndc.png')
     # print(f'save to file ./figures/{dataset}/{dataset}-me-exhausted-ndc.png')
-    get_density_scatter(me_exhausted, query_performance)
+    get_density_scatter(me_exhausted, query_performance, title=f'{select}-{dataset}-k{k}-recall{target_recall:.2f}-prob{target_prob:.2f}', xlabel='me_exhausted', ylabel='query_performance')
+    # plot_scatter(me_exhausted, query_performance, title=f'{dataset}', xlabel='me_exhausted', ylabel='query_performance')
     
     # hardness_K = 150
     # hardness_path = os.path.join(source, dataset, f'{dataset}_me_exhausted_forall_point_recall{target_recall:.2f}_prob{target_prob:.2f}_K{hardness_K}.ibin_clean')

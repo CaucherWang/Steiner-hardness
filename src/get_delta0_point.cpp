@@ -617,8 +617,8 @@ void get_delta0_max_knn_rscc_point_recall_prob(vector<vector<int>>& G, int k, Ma
 
 
             }
-            if(i == GT_list_size)
-                std::cerr << "Exceed the threshold: " << curq << endl;
+            // if(i == GT_list_size)
+            //     std::cerr << "Exceed the threshold: " << curq << endl;
             res[curq] = i + 1;
     }
 }
@@ -2082,14 +2082,15 @@ int main(int argc, char * argv[]) {
         {"help",                        no_argument,       0, 'h'}, 
 
         // Query Parameter 
-        {"randomized",                  required_argument, 0, 'd'},
+        {"dataset",                  required_argument, 0, 'd'},
         {"k",                           required_argument, 0, 'k'},
-        {"epsilon0",                    required_argument, 0, 'r'},
-        {"gap",                         required_argument, 0, 'o'},
+        {"recall",                    required_argument, 0, 'r'},
+        {"purpose",                         required_argument, 0, 'o'},
 
         // Indexing Path 
-        {"dataset",                     required_argument, 0, 'm'},
-        {"dataset",                     required_argument, 0, 'p'},
+        {"method",                     required_argument, 0, 'm'},
+        {"prob",                     required_argument, 0, 'p'},
+        {"base_path",                required_argument, 0, 'b'}
     };
 
     int method = 0; // 0: kgraph 1: hnsw 2: nsg 3: taumng 4: deg
@@ -2103,10 +2104,13 @@ int main(int argc, char * argv[]) {
     float recall = 0.80;
     float prob = 0.80;
 
+    string base_path_str = "../data";
+
     int iarg = 0, ind;
+    int Kmrng = 2047;
     opterr = 1;    //getopt error message (off: 0)
     while(iarg != -1){
-        iarg = getopt_long(argc, argv, "d:k:r:o:m:p:", longopts, &ind);
+        iarg = getopt_long(argc, argv, "d:k:r:o:m:p:b:", longopts, &ind);
         switch (iarg){
             case 'd': 
                 if(optarg){
@@ -2138,6 +2142,16 @@ int main(int argc, char * argv[]) {
                     prob = atof(optarg);
                 }
                 break;
+            case 'b':
+                if(optarg){
+                    base_path_str = optarg;
+                }
+                break;
+            case 'l':
+                if(optarg){
+                    Kmrng = atoi(optarg);
+                }
+                break;
         }
     }
 
@@ -2146,8 +2160,6 @@ int main(int argc, char * argv[]) {
     std::cerr << "method: " << method << "\tpurpose: " << purpose << "\tdata_str: " << data_str 
     << "\tsubk: " << subk << "\trecall: " << recall << "\tprob: " << prob << endl;
 
-    string base_path_str = "../data";
-    string result_base_path_str = "../results";
     string exp_name = "";
     string index_postfix = "";
     string query_postfix = "";
@@ -2156,16 +2168,16 @@ int main(int argc, char * argv[]) {
 
     string data_path_str = base_path_str + "/" + data_str + "/" + data_str + "_base.fvecs" + shuf_postfix;
     string GT_num_str = "";
-    if(data_str.find("rand") != string::npos || data_str.find("gauss") != string::npos || data_str.find("gist") != string::npos)
-        GT_num_str = "_50000";
-    else if(data_str.find("deep") != string::npos || data_str.find("sift") != string::npos)
-        GT_num_str = "_50000";
-    else if(data_str.find("glove") != string::npos){
-        if(purpose < 10)
-            GT_num_str = "_100000";
-        else
-            GT_num_str = "_50000";
-    }
+    // if(data_str.find("rand") != string::npos || data_str.find("gauss") != string::npos || data_str.find("gist") != string::npos)
+    //     GT_num_str = "_50000";
+    // else if(data_str.find("deep") != string::npos || data_str.find("sift") != string::npos)
+    //     GT_num_str = "_50000";
+    // else if(data_str.find("glove") != string::npos){
+    //     if(purpose < 10)
+    //         GT_num_str = "_100000";
+    //     else
+    //         GT_num_str = "_50000";
+    // }
     string groundtruth_path_str;
     if(purpose < 10 || purpose >= 100)
         groundtruth_path_str = base_path_str + "/" + data_str + "/" + data_str 
@@ -2187,7 +2199,7 @@ int main(int argc, char * argv[]) {
     std::cerr << "GT list: " << GT.n << " * " << GT.d << endl;
     // GT.n = 300;
     size_t k = GT.d;
-    k = 20000;
+    // k = 50000;
 
     vector<int>res(GT.n, 0);
 
@@ -2240,6 +2252,27 @@ int main(int argc, char * argv[]) {
         // hnsw
         string ef_str = "1000"; 
         int M = 60;
+
+        const std::map<std::string, std::map<std::string, int>> stringToMetricsMap = {
+            {"glove-100", {
+                {"M", 60},
+                {"ef", 1000},
+            }},
+            {"rand100", {
+                {"M", 100},
+                {"ef", 2000},
+            }},
+            {"gist", {
+                {"M", 32},
+                {"ef", 1000},
+            }}
+        };
+
+        if (stringToMetricsMap.find(data_str) != stringToMetricsMap.end()) {
+            M = stringToMetricsMap.at(data_str).at("M");
+            ef_str = to_string(stringToMetricsMap.at(data_str).at("ef"));
+        }
+
         index_postfix = "_plain";
         index_path_str = base_path_str + "/" + data_str + "/" + data_str + "_ef" + ef_str 
                 + "_M" + to_string(M) + "_hnsw.ibin" + index_postfix + shuf_postfix;
@@ -2280,6 +2313,36 @@ int main(int argc, char * argv[]) {
     }else if(method == 2){
         // nsg
         int L = 150, R = 90, C = 600;
+
+        const std::map<std::string, std::map<std::string, int>> stringToMetricsMap = {
+            {"glove-100", { // 'L': 150, 'R': 90, 'C': 600
+                {"L", 150},
+                {"R", 90},
+                {"C", 600},
+            }},
+            {"rand100", { // 'L': 500, 'R': 200, 'C': 1000
+                {"L", 500},
+                {"R", 200},
+                {"C", 2000},
+            }},
+            {"gist", { // 'L': 100, 'R': 64, 'C': 1000
+                {"L", 100},
+                {"R", 64},
+                {"C", 1000},
+            }},
+            {"gauss100", {
+                {"L", 500},
+                {"R", 200},
+                {"C", 2000},
+            }}
+        };
+
+        if (stringToMetricsMap.find(data_str) != stringToMetricsMap.end()) {
+            L = stringToMetricsMap.at(data_str).at("L");
+            R = stringToMetricsMap.at(data_str).at("R");
+            C = stringToMetricsMap.at(data_str).at("C");
+        }
+
         index_path_str = base_path_str + "/" + data_str + "/" + data_str + "_L" + to_string(L) + "_R" + to_string(R) + "_C" + to_string(C) + ".nsg" + index_postfix + shuf_postfix;
         string delta0_path_str = result_prefix_str + "_delta0_forall_point_recall" + to_string(recall).substr(0, 4) + "_prob" + to_string(prob).substr(0, 4) 
         + "_k" + to_string(subk) + "_L" + to_string(L) + "_R" + to_string(R) + "_C" + to_string(C) + ".ibin_nsg" + index_postfix + shuf_postfix + query_postfix;
@@ -2306,6 +2369,55 @@ int main(int argc, char * argv[]) {
         // tau-mng
         int L = 500, R = 200, C = 1000;
         string tau = "5";
+
+        const std::map<std::string, std::map<std::string, int>> stringToMetricsMap = {
+            {"glove-100", { // 'L': 150, 'R': 90, 'C': 600
+                {"L", 150},
+                {"R", 90},
+                {"C", 600}
+            }},
+            {"rand100", { // 'L': 500, 'R': 200, 'C': 1000
+                {"L", 500},
+                {"R", 200},
+                {"C", 1000}
+            }},
+            {"gist", { // 'L': 100, 'R': 64, 'C': 1000
+                {"L", 100},
+                {"R", 64},
+                {"C", 1000}
+            }},
+            {"gauss100", {
+                {"L", 500},
+                {"R", 200},
+                {"C", 2000}
+            }}
+        };
+
+        const std::map<std::string, std::map<std::string, std::string>> stringToTauMetricsMap = {
+            {"glove-100", { // 'L': 150, 'R': 90, 'C': 600
+                {"tau", "1"}
+            }},
+            {"rand100", { // 'L': 500, 'R': 200, 'C': 1000
+                {"tau", "2"}
+            }},
+            {"gist", { // 'L': 100, 'R': 64, 'C': 1000
+                {"tau", "0.06"}
+            }},
+            {"gauss100", {
+                {"tau", "5"}
+            }}
+        };
+
+        if (stringToMetricsMap.find(data_str) != stringToMetricsMap.end()) {
+            L = stringToMetricsMap.at(data_str).at("L");
+            R = stringToMetricsMap.at(data_str).at("R");
+            C = stringToMetricsMap.at(data_str).at("C");
+        }
+
+        if (stringToTauMetricsMap.find(data_str) != stringToTauMetricsMap.end()) {
+            tau = stringToTauMetricsMap.at(data_str).at("tau");
+        }
+
         index_path_str = base_path_str + "/" + data_str + "/" + data_str + "_L" + to_string(L) + "_R" + to_string(R) 
                 + "_C" + to_string(C) + "_tau" + (tau) + ".taumng" + index_postfix + shuf_postfix;
         string delta0_path_str = result_prefix_str + "_delta0_forall_point_recall" + to_string(recall).substr(0, 4) + "_prob" + to_string(prob).substr(0, 4) 
@@ -2383,16 +2495,16 @@ int main(int argc, char * argv[]) {
         }
     }else if(method == 13){
         // mrng
-        int K=2047;
-        index_path_str = base_path_str + "/" + data_str + "/" + data_str + "_K" + to_string(K) + ".mrng" ;
+        // int Kmrng=2047;
+        index_path_str = base_path_str + "/" + data_str + "/" + data_str + "_K" + to_string(Kmrng) + ".mrng" ;
         string delta0_path_str = result_prefix_str + "_delta0_forall_point_recall" + to_string(recall).substr(0, 4) + "_prob" + to_string(prob).substr(0, 4) 
-        + "_k" + to_string(subk) + "_K" + to_string(K) + ".ibin_mrng" ;
+        + "_k" + to_string(subk) + "_K" + to_string(Kmrng) + ".ibin_mrng" ;
         cerr << "index path: " << index_path_str << endl; 
         auto mrng = new MRNG();
         mrng->Load(index_path_str.c_str());
         
         if(purpose == 0){
-            revg_path_str = base_path_str + "/" + data_str + "/" + data_str + "_K" + to_string(K) + ".mrng_reversed_std";
+            revg_path_str = base_path_str + "/" + data_str + "/" + data_str + "_K" + to_string(Kmrng) + ".mrng_reversed_std";
             cerr << "revG path:" << revg_path_str << endl;
             auto revg = read_rev_graph(revg_path_str, mrng->_size);
             result_path_str = delta0_path_str;
@@ -2400,7 +2512,7 @@ int main(int argc, char * argv[]) {
             get_delta0_max_knn_rscc_point_recall_prob(mrng->_graph, subk, GT, k, *revg, recall_target, prob_target, res);
         }else if(purpose == 1){
             result_path_str = result_prefix_str + "_me_exhausted_forall_point_recall" + to_string(recall).substr(0, 4) + "_prob" + to_string(prob).substr(0, 4)
-            + "_k" + to_string(subk)+ "_K" + to_string(K) + ".ibin_mrng" ;
+            + "_k" + to_string(subk)+ "_K" + to_string(Kmrng) + ".ibin_mrng" ;
             cerr << "result path: "<< result_path_str << endl;
             auto delta0_point = read_ibin_simple(delta0_path_str.c_str());
             // get_me_exhaustive_max_from_delta0_point_recall_prob(mrng->_graph, subk, GT, *delta0_point, recall_target, prob_target, res);
@@ -2408,13 +2520,13 @@ int main(int argc, char * argv[]) {
         }else if(purpose == 4){
             int delta_point = 391;
             result_path_str = result_prefix_str + "_me_exhausted_forall_point_recall" + to_string(recall).substr(0, 4) + "_prob" + to_string(prob).substr(0, 4)
-            + "_delta_point"+ to_string(delta_point) + "_K" + to_string(K) + ".ibin_mrng";
+            + "_delta_point"+ to_string(delta_point) + "_K" + to_string(Kmrng) + ".ibin_mrng";
             cerr << "result path: "<< result_path_str << endl;
             // get_me_exhausted_from_fixed_delta_point_recall_prob(mrng->_graph, subk, GT, delta_point, recall_target, prob_target, res);
             // get_me_exhaustive_from_fixed_delta_point_recall_prob(mrng->_graph, subk, GT, delta_point, recall_target, prob_target, res);
 
         }else if(purpose == 10){
-            revg_path_str = base_path_str + "/" + data_str + "/" + data_str + "_K" + to_string(K) + ".mrng_reversed_std";
+            revg_path_str = base_path_str + "/" + data_str + "/" + data_str + "_K" + to_string(Kmrng) + ".mrng_reversed_std";
             cerr << "revG path:" << revg_path_str << endl;
             auto revg = read_rev_graph(revg_path_str, mrng->_size);
             result_path_str = delta0_path_str + "_benchmark";
@@ -2422,8 +2534,8 @@ int main(int argc, char * argv[]) {
             get_delta0_max_knn_rscc_point_recall_prob(mrng->_graph, subk, GT, k, *revg, recall_target, prob_target, res);
         }else if(purpose == 11){
             delta0_path_str += "_benchmark";
-            result_path_str = result_prefix_str + "hardness_recall" + to_string(recall).substr(0, 4) + "_prob" + to_string(prob).substr(0, 4)
-            + "_k" + to_string(subk)+ "_K" + to_string(K) + ".ibin_mrng_benchmark" ;
+            result_path_str = result_prefix_str + "_hardness_recall" + to_string(recall).substr(0, 4) + "_prob" + to_string(prob).substr(0, 4)
+            + "_k" + to_string(subk)+ "_K" + to_string(Kmrng) + ".ibin_mrng_benchmark" ;
             cerr << "result path: "<< result_path_str << endl;
             auto delta0_point = read_ibin_simple(delta0_path_str.c_str());
             // get_me_exhaustive_max_from_delta0_point_recall_prob(mrng->_graph, subk, GT, *delta0_point, recall_target, prob_target, res);

@@ -75,6 +75,9 @@ def read_ivecs(filename, c_contiguous=True):
         return np.zeros((0, 0))
     dim = fv.view(np.int32)[0]
     assert dim > 0
+    print("Original shape of fv:", fv.shape)
+    print("Dim:", dim)
+
     fv = fv.reshape(-1, 1 + dim)
     if not all(fv.view(np.int32)[:, 0] == dim):
         raise IOError("Non-uniform vector sizes in " + filename)

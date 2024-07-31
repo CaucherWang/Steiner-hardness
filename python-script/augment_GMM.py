@@ -35,10 +35,10 @@ if __name__ == '__main__':
         # for dim in [50, 100, 150, 200, 250, 300, 500, 750, 1000, 2000, 4000]:
             # path
         path = os.path.join(source, dataset)
-        data_path = os.path.join(path, f'{dataset}_base.fvecs')
+        # data_path = os.path.join(path, f'{dataset}_base.fvecs')
         benchmark_path = os.path.join(path, f'{dataset}_benchmark_all.fvecs')
         # query_path = os.path.join(path, f'{dataset}_query.fvecs')
-        # data_path = os.path.join(path, f'{dataset}_base.fbin')
+        data_path = os.path.join(path, f'{dataset}_base.fbin')
         # data_path = os.path.join(path, f'{dataset}_sample_query_smallest.fbin')
         # query_path = os.path.join(path, f'{dataset}_query.fbin')
         # query_path = os.path.join(path, f'{dataset}_base.fbin')
@@ -49,23 +49,23 @@ if __name__ == '__main__':
         # X = read_fbin(data_path)
         D = X.shape[1]
         print(X.shape)
-        # X = L2_norm_dataset(X)
+        X = L2_norm_dataset(X)
         
-        # gmm = GaussianMixture(n_components=4, covariance_type='full', verbose=True).fit(X)
-        # print('model built')
-        # # save the model
-        # model_path = os.path.join(path, f'{dataset}_gmm.bin')
-        # # write to disk
-        # write_obj(model_path, gmm)
-        # print('model saved')
-        # n_samples = 1000000
-        # X_sample = gmm.sample(n_samples)[0]
+        gmm = GaussianMixture(n_components=4, covariance_type='full', verbose=True).fit(X)
+        print('model built')
+        # save the model
+        model_path = os.path.join(path, f'{dataset}_gmm.bin')
+        # write to disk
+        write_obj(model_path, gmm)
+        print('model saved')
+        n_samples = 1000000
+        X_sample = gmm.sample(n_samples)[0]
 
-        X_sample = read_fvecs(benchmark_path)
+        # X_sample = read_fvecs(benchmark_path)
         
-        plot_mahalanobis_distance_distribution(X, X_sample, dataset)
+        # plot_mahalanobis_distance_distribution(X, X_sample, dataset)
         
-        # write_fvecs(benchmark_path, X_sample)
+        write_fvecs(benchmark_path, X_sample)
         
         
         
