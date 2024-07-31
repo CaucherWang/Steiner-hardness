@@ -7,7 +7,7 @@ import numpy as np
 from utils import *
 from sklearn.mixture import GaussianMixture
 
-source = './data/'
+source = './workloads/'
 datasets = ['glove-100']
 # prob = 0.86
 probs = {
@@ -21,7 +21,7 @@ KMRNG = 2047
 if __name__ == '__main__':
     for dataset in datasets:
         path = os.path.join(source, dataset)
-        gt_path = os.path.join(path, f'{dataset}_benchmark_groundtruth_50000.ivecs')
+        gt_path = os.path.join(path, f'{dataset}_benchmark_groundtruth_recall0.98.ivecs')
         gt = read_ivecs(gt_path)[:, :2048]
         data_path = os.path.join(path, f'{dataset}_base.fvecs')
         benchmark_path = os.path.join(path, f'{dataset}_benchmark_all.fvecs')

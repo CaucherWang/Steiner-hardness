@@ -34,7 +34,15 @@ g++ ./src/search_deg.cpp -O3 -o ./src/search_deg -I ./src -ffast-math -march=nat
 
 # ./src/search_kgraph -d ${randomize} -n ${data} -i ${index} -q ${query} -g ${gnd} -r ${res} -t ${trans} -k ${k}
 cd src
-./search_deg
+
+# dataset="deep"
+# dataset="glove-100"
+# dataset="gist"
+dataset="rand100"
+for recall in 0.42
+do
+    ./search_deg -r ${recall} -k 50 -d ${dataset} >> ${dataset}.out &
+done
 
 echo "done"
 

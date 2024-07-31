@@ -1,13 +1,8 @@
 from utils import *
 
-import matplotlib.pyplot as plt
-
-fig = plt.figure(figsize=(6,4.8))
-
-
-source = './data/'
-result_source = './results/'
-exp = 'kgraph'
+source = '../data/'
+result_source = '../results/'
+exp = 'taumng'
 dataset = 'glove-100'
 
 idx_postfix = '_plain'
@@ -59,9 +54,9 @@ if __name__ == "__main__":
         write_obj(standard_reversed_hnsw_path, revG)
         transform_kgraph2std(standard_reversed_hnsw_path + '_std', revG)
     elif exp == 'nsg':
-        R = 64
-        L = 100
-        C = 1000
+        R = 200
+        L = 500
+        C = 2000
         nsg_path = os.path.join(source, dataset, f'{dataset}_L{L}_R{R}_C{C}.nsg')
         reversed_nsg_path = os.path.join(source, dataset, f'{dataset}_L{L}_R{R}_C{C}.nsg_reversed')
 
@@ -71,10 +66,10 @@ if __name__ == "__main__":
         # revG = read_obj(reversed_nsg_path)
         transform_kgraph2std(reversed_nsg_path + '_std', revG)
     elif exp == 'taumng':
-        L = 500
-        R = 200
-        C = 1000
-        tau = '5'
+        L = 150
+        R = 90
+        C = 600
+        tau = '1'
         tau_path = os.path.join(source, dataset, f'{dataset}_L{L}_R{R}_C{C}_tau{tau}.taumng')
         reversed_tau_path = os.path.join(source, dataset, f'{dataset}_L{L}_R{R}_C{C}_tau{tau}.taumng_reversed')
 

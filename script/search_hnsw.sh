@@ -36,21 +36,50 @@ g++ ./src/search_hnsw.cpp -O3 -o ./src/search_hnsw -I ./src -ffast-math -march=n
 
 # ./src/search_hnsw -d ${randomize} -n ${data} -i ${index} -q ${query} -g ${gnd} -r ${res} -t ${trans} -k ${k}
 cd src
-./search_hnsw
 
-# dataset=deep
-# for i in {3..9}
+# for recall in 0.94
 # do
-# shuf_str="_shuf${i}"
-# for recall in 0.98
-# do
-#     for k in 10 20 50 100 200 500
+#     for k in 100 # 20 50 100 200 500
 #     do
-#         echo "recall=${recall}, k=${k}, shuf=${shuf_str}"
-#         nohup ./search_hnsw -r ${recall} -k ${k} -d ${dataset} -s ${shuf_str} 2>&1 >> ${i}.out &
+        # dataset="gist"
+        # ef=1000
+        # M=32
+        # ./search_hnsw -e ${ef} -m ${M} -r ${recall} -k ${k} -d ${dataset} >> ${dataset}.out &
+        # dataset="rand100"
+        # ef=2000
+        # M=100
+        # ./search_hnsw -e ${ef} -m ${M} -r ${recall} -k ${k} -d ${dataset} >> ${dataset}.out &
+#         dataset="glove-100"
+#         ef=1000
+#         M=60
+#         ./search_hnsw -e ${ef} -m ${M} -r ${recall} -k ${k} -d ${dataset} >> ${dataset}.out &
 #     done
 # done
-# done
+
+
+k=50
+# recall=0.94
+
+dataset="deep"
+ef=500
+M=16
+
+# dataset="glove-100"
+# ef=1000
+# M=60
+
+# dataset="gist"
+# ef=1000
+# M=32
+
+# dataset="rand100"
+# ef=2000
+# M=100
+
+for recall in 0.42
+do
+    ./search_hnsw -e ${ef} -m ${M} -r ${recall} -k ${k} -d ${dataset} >> ${dataset}.out &
+done
 
 echo "done"
 
