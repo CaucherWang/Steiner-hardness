@@ -1,132 +1,124 @@
-#include <iostream>
-#include <fstream>
-#include <queue>
 #include <getopt.h>
+#include <cstring>
+#include <fstream>
+#include <iostream>
+#include <queue>
 #include <unordered_set>
-#include<cstring>
 
-#include "matrix.h"
-#include "kgraph.h"
-#include "mrng.h"
 #include "utils.h"
 #include "hnswlib/hnswlib.h"
+#include "kgraph.h"
+#include "matrix.h"
+#include "mrng.h"
 
 
-
-int main(int argc, char * argv[]) {
-
-    const struct option longopts[] ={
-        // General Parameter
-        {"help",                        no_argument,       0, 'h'}, 
-
-        // Index Parameter
-        {"efConstruction",              required_argument, 0, 'e'}, 
-        {"K",                           required_argument, 0, 'k'}, 
-
-        // Indexing Path 
-        {"data_path",                   required_argument, 0, 'd'},
-        {"index_path",                  required_argument, 0, 'i'},
-        {"method",                     required_argument, 0, 'm'},
+int main(int argc, char *argv[]) {
+    const struct option longopts[] = {
+        {"help", no_argument, 0, 'h'},
+        {"K", required_argument, 0, 'k'},
+        {"data_path", required_argument, 0, 'd'},
+        {"index_path", required_argument, 0, 'i'},
+        {"kgraph_path", required_argument, 0, 'g'},
+        {"method", required_argument, 0, 'm'},
     };
 
     int ind;
     int iarg = 0;
-    opterr = 1;    //getopt error message (off: 0)
+    opterr = 1;  // getopt error message (off: 0)
 
+    // Variables to store command-line arguments
+    char data_path_str[256] = "";
+    char kgraph_path_str[256] = "";
+    char index_path_str[256] = "";
+    int kgraph_od = 0;
+    int method = 1;  // Default method: SSG
 
-    char data_char_str[25] = "rand100";
-    char kgraph_od_char[25] = "_2048";
-    int method = 1; // 0: MRNG, 1: SSG 2: tau-MG
-
-
-    while(iarg != -1){
-        iarg = getopt_long(argc, argv, "d:k:m:", longopts, &ind);
-        switch (iarg){
+    // Parse command-line arguments
+    while (iarg != -1) {
+        iarg = getopt_long(argc, argv, "d:i:g:k:m:h", longopts, &ind);
+        switch (iarg) {
             case 'd':
-                if(optarg){
-                    strcpy(data_char_str, optarg);
+                if (optarg) {
+                    strncpy(data_path_str, optarg, sizeof(data_path_str) - 1);
+                }
+                break;
+            case 'i':
+                if (optarg) {
+                    strncpy(index_path_str, optarg, sizeof(index_path_str) - 1);
+                }
+                break;
+            case 'g':
+                if (optarg) {
+                    strncpy(kgraph_path_str, optarg, sizeof(kgraph_path_str) - 1);
                 }
                 break;
             case 'k':
-                if(optarg){
-                    strcpy(kgraph_od_char, optarg);
+                if (optarg) {
+                    kgraph_od = atoi(optarg);
                 }
                 break;
             case 'm':
-                if(optarg){
+                if (optarg) {
                     method = atoi(optarg);
                 }
-                if(method == 0){
-                    cerr << "MRNG" << endl;
-                }else if(method == 1){
-                    cerr << "SSG" << endl;
-                }else if(method == 2){
-                    cerr << "tau-MG" << endl;
-                }
-                else{
-                    cerr << "method error" << endl;
-                    exit(1);
-                }
                 break;
+            case 'h':
+                std::cout << "Usage: " << argv[0] << " -d <data_path> -i <index_path> -g <kgraph_path> -k <K> -m <method>\n";
+                exit(0);
         }
     }
-    
-    string data_str = data_char_str;   
-    string kgraph_od = kgraph_od_char;
-    string kgraph_postfix = "";
-    int K_od =atoi(kgraph_od.substr(1).c_str()) - 1; 
-    int KBuild = K_od;
-    assert (KBuild <= K_od);
-    string base_path_str = "/home/hadoop/wzy/ADSampling/data";
-    string kgraph_path_str = base_path_str + "/" + data_str + "/" + data_str + "_self_groundtruth" + kgraph_od + ".ivecs" + kgraph_postfix;
-    string data_path = base_path_str + "/" + data_str + "/" + data_str + "_base.fvecs"; 
 
+    if (strlen(data_path_str) == 0 || strlen(index_path_str) == 0 || strlen(kgraph_path_str) == 0 || kgraph_od == 0) {
+        std::cerr << "Missing required arguments. Use --help for usage.\n";
+        exit(1);
+    }
+
+    std::string data_path = data_path_str;
+    std::string kgraph_path = kgraph_path_str;
+    std::string index_path = index_path_str;
+
+    int K_od = kgraph_od - 1;
+    int KBuild = K_od;
+    assert(KBuild <= K_od);
 
     Matrix<float> *X = new Matrix<float>(const_cast<char *>(data_path.c_str()));
     size_t D = X->d;
     size_t N = X->n;
-    // size_t N = 100000;
 
     L2Space space(D);
-    cerr << "L2 space " << endl;
-    // InnerProductSpace space(D);
-    // cerr << "IP space222" << endl;
+    std::cerr << "L2 space " << std::endl;
 
-    // KGraph *kgraph = new KGraph(kgraph_path_str.c_str(), nullptr, &space, KBuild, 0, K_od);
-    // vector<vector<int>>* kgraph_vector = kgraph->get_graph();
     int n = 0;
-    auto kgraph_vector = read_kgraph(kgraph_path_str, n, KBuild);
+    auto kgraph_vector = read_kgraph(kgraph_path, n, KBuild);
 
-    if(method == 0){
-        string index_path = base_path_str + "/" + data_str + "/" + data_str + "_K" + to_string(K_od) + ".mrng";
-        cerr << "save to " << index_path << endl;
+    if (method == 0) {
+        // index_path = index_path + "_K" + std::to_string(K_od) + ".mrng";
+        std::cerr << "save to " << index_path << std::endl;
 
         MRNG mrng(N, D, &space);
         mrng.buildIndex(X->data, *kgraph_vector);
         mrng.save(index_path);
-    } else if(method == 1){
+    } else if (method == 1) {
         int alpha = 60;
-
-        string index_path = base_path_str + "/" + data_str + "/" + data_str + "_K" + to_string(K_od) + "_alpha" + to_string(alpha) + ".ssg";
-        cerr << "save to " << index_path << endl;
+        // index_path = index_path + "_K" + std::to_string(K_od) + "_alpha" + std::to_string(alpha) + ".ssg";
+        std::cerr << "save to " << index_path << std::endl;
 
         MRNG mrng(N, D, &space);
-        
         mrng.buildSSG(X->data, *kgraph_vector, alpha);
         mrng.save(index_path);
-    } else if(method == 2){
-        float tau = 0.01;
-
-        string index_path = base_path_str + "/" + data_str + "/" + data_str + "_K" + to_string(K_od) + "_tau" + to_string(tau).substr(0,4) + ".tau-mg";
-        cerr << "save to " << index_path << endl;
+    } else if (method == 2) {
+        float tau = 0.01f;
+        // index_path = index_path + "_K" + std::to_string(K_od) + "_tau" + std::to_string(tau).substr(0, 4) + ".tau-mg";
+        std::cerr << "save to " << index_path << std::endl;
 
         MRNG mrng(N, D, &space);
         mrng.buildtauMG(X->data, *kgraph_vector, tau);
         mrng.save(index_path);
-    }
-    else{
-        cerr << "method error" << endl;
+    } else {
+        std::cerr << "method error" << std::endl;
         exit(1);
     }
+
+    delete X;
     return 0;
 }

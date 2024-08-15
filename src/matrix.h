@@ -28,9 +28,19 @@ public:
     Matrix(char * data_file_path, bool is_bin, int N); // IO from fbin
     Matrix(size_t n, size_t d); // Matrix of size n * d
 
+     // Copy constructor
+    Matrix(const Matrix& other) : n(other.n), d(other.d), M(other.M), Ks(other.Ks), sub_vec_len(other.sub_vec_len) {
+        data = new T[n * d];
+        memcpy(data, other.data, sizeof(T) * n * d);
+    }
+
+    // Move constructor
+    Matrix(Matrix&& other) noexcept : data(other.data), n(other.n), d(other.d), M(other.M), Ks(other.Ks), sub_vec_len(other.sub_vec_len) {
+        other.data = nullptr;
+    }
+
     // Deconstruction
     ~Matrix(){ delete [] data;}
-
     Matrix & operator = (const Matrix &X){
         delete [] data;
         n = X.n;

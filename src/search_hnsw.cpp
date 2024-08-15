@@ -95,9 +95,11 @@ int recall(std::priority_queue<std::pair<dist_t, labeltype >> &result, std::prio
 
 template<typename data_t, typename dist_t>
 static void test_approx(data_t *massQ, size_t vecsize, size_t qsize, HierarchicalNSW<dist_t> &appr_alg, size_t vecdim,
-            vector<std::priority_queue<std::pair<dist_t, labeltype >>> &answers, size_t k, int adaptive) {
+            vector<std::priority_queue<std::pair<dist_t, labeltype >>> &answers, size_t k, int adaptive, int ndc_upperbound) {
     size_t correct = 0;
     size_t total = 0;
+    size_t q_correct = 0;
+    size_t q_total = 0;
     long double total_time = 0;
 
     int expr_round = 1;
@@ -109,7 +111,11 @@ static void test_approx(data_t *massQ, size_t vecsize, size_t qsize, Hierarchica
     long accum_ndc = 0;
     for(int _ = 0; _ < expr_round; ++_){
         for (int i = 0; i < qsize; i++) {
-            // if(i % 100 == 0)    cerr << i << endl;
+            q_correct = 0;
+            q_total = 0;
+            if((i > 0 && i % 1000 == 0) || i == qsize - 1) {
+                cerr << i << "/" << qsize << endl;
+            }
             #ifdef DEEP_QUERY
             if(i != FOCUS_QUERY)  continue;
             #endif
@@ -126,7 +132,8 @@ static void test_approx(data_t *massQ, size_t vecsize, size_t qsize, Hierarchica
             std::priority_queue<std::pair<dist_t, labeltype >> gt(answers[i]);
             std::priority_queue<std::pair<dist_t, labeltype >> result = appr_alg.searchKnnPlainDEEP_QUERY(massQ + vecdim * i, k, gt);
 #else
-            std::priority_queue<std::pair<dist_t, labeltype >> result = appr_alg.searchKnnPlain(massQ + vecdim * i, k, adaptive );  
+            Metric metric{};
+            std::priority_queue<std::pair<dist_t, labeltype >> result = appr_alg.searchKnnPlain(massQ + vecdim * i, k, ndc_upperbound, adaptive, &metric);  
 #endif
 #ifndef WIN32
             GetCurTime( &run_end);
@@ -136,8 +143,9 @@ static void test_approx(data_t *massQ, size_t vecsize, size_t qsize, Hierarchica
             if(_ == 0){
                 std::priority_queue<std::pair<dist_t, labeltype >> gt(answers[i]);
                 total += gt.size();
+                q_total = gt.size();
                 int tmp = recall(result, gt);
-                // cout << tmp << ",";
+                q_correct = tmp;
                 ndcs[i] += (adsampling::tot_full_dist - accum_ndc);
                 recalls[i] = tmp;
                 accum_ndc = adsampling::tot_full_dist;
@@ -146,7 +154,8 @@ static void test_approx(data_t *massQ, size_t vecsize, size_t qsize, Hierarchica
                 cout << tmp << endl;
                 #endif
                 #endif
-                correct += tmp;   
+                correct += tmp;
+                cout << 1.0 * q_correct / q_total << ", ";
             }
         }
     }
@@ -171,10 +180,8 @@ static void test_approx(data_t *massQ, size_t vecsize, size_t qsize, Hierarchica
 #endif
 
     auto tmp = double(expr_round);
-    cout << endl;
     // for(auto &_: ndcs)
     //     cout << _ << ","; 
-    cout << endl;
     cout << setprecision(4);
     // for(int i =0;i<ndcs.size();++i)
     //     cout << (double)recalls[i] / (double)ndcs[i] * 100.0 << ",";
@@ -192,7 +199,7 @@ static void test_approx(data_t *massQ, size_t vecsize, size_t qsize, Hierarchica
     cout << setprecision(6);
     cout << endl;
     // cout << appr_alg.ef_ << " " << recall * 100.0 << " " << time_us_per_query << " " << adsampling::tot_dimension + adsampling::tot_full_dist * vecdim << endl;
-    cout << appr_alg.ef_ << " " << recall * 100.0 << " " << time_us_per_query << " ||| nhops: " << hop_per_query
+    cout << ndc_upperbound << " " << recall * 100.0 << " " << time_us_per_query << " ||| nhops: " << hop_per_query
     << " ||| full dist time: " << dist_calc_time << " ||| approx. dist time: " << app_dist_calc_time 
     << " ||| #full dists: " << full_dist_per_query << " ||| #approx. dist: " << approx_dist_per_query 
     << endl << "\t\t" 
@@ -223,6 +230,7 @@ static void test_vs_recall(data_t *massQ, size_t vecsize, size_t qsize, Hierarch
     // vector<size_t> efs{100, 150, 200, 250, 300,400,500,600};
     // vector<size_t> efs{30,40,50,60, 70, 80, 90, 100, 125, 150, 200, 250, 300, 400};
     vector<size_t> efs{750, 1000, 1500, 2000, 3000, 4000, 5000, 6000};
+    // vector<size_t> efs{1000000};
     // vector<size_t> efs{500, 600, 750, 1000, 1500, 2000, 3000, 4000, 5000, 6000, 7000, 8000, 9000, 10000, 12500, 15000, 20000};
     // vector<size_t> efs{300, 500, 700, 1000, 1500, 2000, 3000, 4000, 5000, 6000, 7000, 8000};
     // vector<size_t> efs{72};
@@ -238,7 +246,7 @@ static void test_vs_recall(data_t *massQ, size_t vecsize, size_t qsize, Hierarch
         // ProfilerStart("../prof/svd-profile.prof");
     for (size_t ef : efs) {
         appr_alg.setEf(ef);
-        test_approx(massQ, vecsize, qsize, appr_alg, vecdim, answers, k, adaptive);
+        test_approx(massQ, vecsize, qsize, appr_alg, vecdim, answers, k, adaptive, 0);
     }
         // ProfilerStop();
 }
@@ -303,7 +311,7 @@ static void test_lb_recall(data_t *massQ, size_t vecsize, size_t qsize, Hierarch
                 else{
                     adsampling::clear();
                     appr_alg.setEf(mid);
-                    std::priority_queue<std::pair<dist_t, labeltype >> result = appr_alg.searchKnnPlain(massQ + vecdim * i, k, adaptive);  
+                    std::priority_queue<std::pair<dist_t, labeltype >> result = appr_alg.searchKnnPlain(massQ + vecdim * i, k, INT_MAX, adaptive);  
                     std::priority_queue<std::pair<dist_t, labeltype >> gt(answers[i]);
                     tmp = recall(result, gt);
                     recall_records2[mid] = make_pair(tmp, adsampling::tot_full_dist);
@@ -368,7 +376,7 @@ static void test_performance(data_t *massQ, size_t vecsize, size_t qsize, Hierar
                 cerr << index << " / " << qsize << endl;
         }
 
-        int lowef = k, highef, curef, tmp, bound = 50000;
+        int lowef = k, highef, curef, tmp, bound = 5000;
         long success = -1;
         Metric metric;
 
@@ -380,7 +388,7 @@ static void test_performance(data_t *massQ, size_t vecsize, size_t qsize, Hierar
                 curef = (lowef + highef) / 2;
                 metric.clear();
 
-                std::priority_queue<std::pair<dist_t, labeltype >> result = appr_alg.searchKnnPlain(massQ + vecdim * i, k, adaptive, &metric, curef);  
+                std::priority_queue<std::pair<dist_t, labeltype >> result = appr_alg.searchKnnPlain(massQ + vecdim * i, k, INT_MAX, adaptive, &metric, curef);  
 
                 std::priority_queue<std::pair<dist_t, labeltype >> gt(answers[i]);
                 tmp = recall(result, gt);
@@ -430,9 +438,10 @@ static void test_performance(data_t *massQ, size_t vecsize, size_t qsize, Hierar
             else if(tmp < lowk){
                 long large_ndc = metric.ndc;
                 curef = highef;
+                adsampling::clear();
                 metric.clear();
 
-                std::priority_queue<std::pair<dist_t, labeltype >> result = appr_alg.searchKnnPlain(massQ + vecdim * i, k, adaptive, &metric, curef);  
+                std::priority_queue<std::pair<dist_t, labeltype >> result = appr_alg.searchKnnPlain(massQ + vecdim * i, k, INT_MAX, adaptive, &metric, curef);  
                 std::priority_queue<std::pair<dist_t, labeltype >> gt(answers[i]);
                 tmp = recall(result, gt);
                 if(tmp >= lowk){
@@ -449,10 +458,10 @@ static void test_performance(data_t *massQ, size_t vecsize, size_t qsize, Hierar
                 }
             }
         }
-        if(!flag){
-            cerr << i << endl;
-            exit(-1);
-        }
+        // if(!flag){
+        //     cerr << i << endl;
+        //     exit(-1);
+        // }
     }
 
     for(int i = 0; i < qsize; ++i){
@@ -493,9 +502,9 @@ int main(int argc, char * argv[]) {
     //                           1: ADS+       41:LSH+             71: OPQ+ 81:PCA+       TMA optimize (from ADSampling)
     //                                                       62:PQ! 72:OPQ!              QEO optimize (from tau-MNG)
     int method = 0;
-    int purpose = 1; // 0 for curve; 1 for lqc; 2 for new workloads 3: for curve new workloads
+    int purpose = 42; // 0 for curve; 1 for lqc; 2 for new workloads 3: for curve new workloads 4: calculate recall for new workloads
     char data_str_char[256];
-    string data_str = "glove-100";   // dataset name
+    string data_str = "deep";   // dataset name
     float recall = 0.86;
     char recall_char[5], M_char[5], ef_char[5], shuf_char[10];
     int data_type = 0; // 0 for float, 1 for uint8, 2 for int8
@@ -558,10 +567,14 @@ int main(int argc, char * argv[]) {
     string exp_name;
     if(purpose == 1)
         exp_name = "perform_variance" + recall_str;
-    else if(purpose == 2)
+    else if(purpose == 2 || purpose == 41)
         exp_name = "benchmark_perform_variance" + recall_str;
     else if(purpose == 3)
         exp_name = "curve_benchmark" + recall_str;
+    else if (purpose == 4)
+        exp_name = "recall_benchmark" + recall_str;
+    else if (purpose == 42)
+        exp_name = "perform_variance_ndc";
     string index_postfix = "_plain";
     string query_postfix = "";
     // string index_postfix = "";
@@ -574,10 +587,13 @@ int main(int argc, char * argv[]) {
     else if(data_type == 2) query_path_str_postfix = ".i8bin";
     query_path_str_postfix = ".fvecs";
     string query_path_str;
-    if(purpose == 0 || purpose ==1) 
+    if(purpose == 0 || purpose == 1 || purpose == 42) 
         query_path_str = base_path_str + "/" + data_str + "/" + data_str + "_query" + query_path_str_postfix + query_postfix;
-    else if(purpose == 2 || purpose == 3)
+    else if(purpose == 2 || purpose == 3 || purpose == 4)
         query_path_str = base_path_str + "/" + data_str + "/" + data_str + "_benchmark_recall" + recall_str + query_path_str_postfix + query_postfix;
+    else if (purpose == 41) {
+        query_path_str = base_path_str + "/" + data_str + "/" + data_str + "_benchmark_recall0.94" + query_path_str_postfix + query_postfix;
+    }
     // string query_path_str = data_path_str;
     string result_prefix_str = "";
     #ifdef USE_SIMD
@@ -595,11 +611,13 @@ int main(int argc, char * argv[]) {
     result_path_str += "_deepquery";
     #endif
     string groundtruth_path_str;
-    if(purpose == 0 || purpose ==1) 
+    if(purpose == 0 || purpose == 1 || purpose == 42) 
         groundtruth_path_str = base_path_str + "/" + data_str + "/" + data_str + "_groundtruth.ivecs" + shuf_postfix + query_postfix;
-    else if(purpose == 2 || purpose == 3)
+    else if(purpose == 2 || purpose == 3 || purpose == 4)
         groundtruth_path_str = base_path_str + "/" + data_str + "/" + data_str + "_benchmark_groundtruth_recall" + recall_str + ".ivecs" + shuf_postfix + query_postfix;
-    
+    else if (purpose == 41) {
+        groundtruth_path_str = base_path_str + "/" + data_str + "/" + data_str + "_benchmark_groundtruth_recall0.94.ivecs" + shuf_postfix + query_postfix;
+    }
     char index_path[256];
     strcpy(index_path, index_path_str.c_str());
     char query_path[256] = "";
@@ -685,6 +703,14 @@ int main(int argc, char * argv[]) {
         // ProfilerStart("../prof/svd-profile.prof");
         if(purpose == 0 || purpose == 3)
             test_vs_recall(Q.data, appr_alg->max_elements_, Q.n, *appr_alg, Q.d, answers, subk, method);
+        else if (purpose == 4 || purpose == 42) {
+            appr_alg->setEf(5000);
+            vector<int> recall_upperbounds = {500, 1000, 2000, 4000, 8000, 16000, 32000, 64000};
+            for (int recall_upperbound : recall_upperbounds) {
+                test_approx(Q.data, appr_alg->max_elements_, Q.n, *appr_alg, Q.d, answers, subk, method, recall_upperbound);
+                cerr << recall_upperbound << " recall benchmark done" << endl;
+            }
+        }
         else
             test_performance(Q.data, appr_alg->max_elements_, Q.n, *appr_alg, Q.d, answers, subk, method, recall);
         // test_lb_recall(Q.data, appr_alg->max_elements_, Q.n, *appr_alg, Q.d, answers, subk, method);

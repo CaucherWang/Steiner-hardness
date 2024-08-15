@@ -22,11 +22,78 @@ In such cases, even though the average query performance is good, users may suff
 * openmp
 
 ---
+
+## Quick Start
+
+### 1. Prepare
+
+1. Ensure you have the following datasets and queries ready:
+- dataset named `{dataset}_base.fvecs`
+- queries named `{dataset}_query.fvecs`
+
+2. Clone the Efanna library:
+
+```bash
+git clone https://github.com/ZJULearning/efanna_graph
+```
+
+3. Install g++ 9 or higher.
+
+4. Install some python library:
+
+```bash
+cd python-script
+pip install -r requirements.txt
+```
+
+### 2. Configure Settings
+
+Edit the `python-script/config.py` file to set your configurations.
+
+### 3. Execute the Script
+
+Navigate to the `python-script` folder and run the script to execute all steps in sequence:
+
+##### Preprocessing
+
+```bash
+python run.py --command preprocess --config-file config.py
+```
+
+This step includes:
+- Generating kgraph using `efanna` library
+- Generating the graph of `mrng`
+- Calculating the reverse graph of `mrng`
+- Sampling and training the GMM model
+
+##### Calculate $Steiner$-hardness of Your Query Set
+
+```bash
+python run.py --command hardness --config-file config.py
+```
+
+This step includes:
+- Constructing the groundtruth of `query.fvecs`
+- Calculating hardness
+
+##### Generate Unbiased Workloads of Your Dataset
+
+```bash
+python run.py --command benchmark --config-file config.py
+```
+
+This step includes:
+- Generating queries using the GMM model trained in the preprocess stage
+- Constructing the groundtruth for benchmark
+- Calculating the hardness for the benchmark
+- Constructing the benchmark
+
+---
+
 ## Build
 There are many entries in this project.
 You can build them directly with g++ 9 or higher.
 Building scripts are provided in folder `script/`
-
 
 ## Usage
 ### 0. Get the unbiased workloads

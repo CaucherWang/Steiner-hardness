@@ -61,9 +61,9 @@ public:
     }
 
     void search(unsigned ep_id, size_t ef,  float* query_data,
-            std::priority_queue<std::pair<float, unsigned>, std::vector<std::pair<float, unsigned>>> &result, Metric & metric) ;
+            std::priority_queue<std::pair<float, unsigned>, std::vector<std::pair<float, unsigned>>> &result, Metric & metric, int ndc_upperbound) ;
 
-    std::priority_queue<std::pair<float, int >> searchKnnKGraph(float *query_data, size_t k, int ef, Metric & metric, int ep=-1);
+    std::priority_queue<std::pair<float, int >> searchKnnKGraph(float *query_data, size_t k, int ef, Metric & metric, int ep, int ndc_upperbound);
     #ifdef DEEP_QUERY
     std::priority_queue<std::pair<float, int >> searchKnnKGraphDEEP_QUERY(float *query_data, size_t k, int ef, std::priority_queue<std::pair<float, int >>& gt_);
     void searchDEEP_QUERY(unsigned ep_id, size_t ef, float* query_data,
@@ -84,7 +84,7 @@ public:
 
 void KGraph::search(unsigned ep_id, size_t ef, float* query_data,
             std::priority_queue<std::pair<float, unsigned>, std::vector<std::pair<float, unsigned>>> &result,
-            Metric & metric) {
+            Metric & metric, int ndc_upperbound) {
     std::priority_queue<std::pair<float, unsigned>, std::vector<std::pair<float, unsigned>>> candidates;
     float d = fstdistfunc_(query_data, vecs_ + ep_id * _dim, dist_func_param_);
     result.emplace(d, ep_id);
@@ -119,6 +119,12 @@ void KGraph::search(unsigned ep_id, size_t ef, float* query_data,
                 if (result.size() > ef)
                     result.pop();
             }
+            if (metric.ndc > ndc_upperbound) {
+                break;
+            }
+        }
+        if (metric.ndc > ndc_upperbound) {
+            break;
         }
     }
     visited_list_pool_->releaseVisitedList(vl);
@@ -385,7 +391,7 @@ KGraph::searchKnnKGraphDEEP_QUERY(float *query_data, size_t k, int ef, std::prio
 #endif
 
 std::priority_queue<std::pair<float, int >>
-KGraph::searchKnnKGraph(float *query_data, size_t k, int ef, Metric & metric, int ep) {
+KGraph::searchKnnKGraph(float *query_data, size_t k, int ef, Metric & metric, int ep, int ndc_upperbound) {
     std::priority_queue<std::pair<float, int >> result;
 
     unsigned entry_point;
@@ -402,7 +408,7 @@ KGraph::searchKnnKGraph(float *query_data, size_t k, int ef, Metric & metric, in
     //max heap
     std::priority_queue<std::pair<float, unsigned>, std::vector<std::pair<float, unsigned>>> top_candidates;
 
-    search(currObj, ef, query_data, top_candidates, metric);
+    search(currObj, ef, query_data, top_candidates, metric, ndc_upperbound);
 
     while (top_candidates.size() > k) {
         top_candidates.pop();
