@@ -8,7 +8,7 @@ paths = {
 common = {
     'dataset_name': "gist",  # Dataset name
     'KMRNG': 2047,  # KMRNG value
-    'postfix': "vecs"  # File suffix, either "vecs" or "bin"
+    'postfix': "vecs"  # File suffix, only support 'vecs' now
 }
 
 # Preprocessing configuration, {dataset}_query.fvecs is required
@@ -24,9 +24,9 @@ preprocess = {
 
 # Hardness calculation configuration
 hardness = {
-    'k': 50,  # k value
-    'recall': 0.98,  # Recall rate
-    'prob': 0.98,  # Probability
+    'k': 50,  # the number of nearest neighbors
+    'recall': 0.98,  # Acc, the minimum number of accessed vertices to obtain at least Acc * k vertices in N_k
+    'prob': 0.98,  # probabilistic lower bound to reach the target recall, allowing at least p * k points in N_k are able to reach Acc * k points in N_k
     'groundtruth_dim': 50000,  # Ground truth dimension
 }
 
