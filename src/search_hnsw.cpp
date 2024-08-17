@@ -1,6 +1,5 @@
 #define USE_SIMD
 // #define DEEP_DIVE
-// #define DEEP_QUERY
 // #define STAT_QUERY
 // #define FOCUS_QUERY (9766)
 
@@ -116,9 +115,6 @@ static void test_approx(data_t *massQ, size_t vecsize, size_t qsize, Hierarchica
             if((i > 0 && i % 1000 == 0) || i == qsize - 1) {
                 cerr << i << "/" << qsize << endl;
             }
-            #ifdef DEEP_QUERY
-            if(i != FOCUS_QUERY)  continue;
-            #endif
             adsampling::cur_query_label = i;
 #ifdef ED2IP
     hnswlib::cur_query_vec_len = hnswlib::query_vec_len[i];
@@ -128,13 +124,8 @@ static void test_approx(data_t *massQ, size_t vecsize, size_t qsize, Hierarchica
             struct rusage run_start, run_end;
             GetCurTime( &run_start);
 #endif
-#ifdef DEEP_QUERY
-            std::priority_queue<std::pair<dist_t, labeltype >> gt(answers[i]);
-            std::priority_queue<std::pair<dist_t, labeltype >> result = appr_alg.searchKnnPlainDEEP_QUERY(massQ + vecdim * i, k, gt);
-#else
             Metric metric{};
             std::priority_queue<std::pair<dist_t, labeltype >> result = appr_alg.searchKnnPlain(massQ + vecdim * i, k, ndc_upperbound, adaptive, &metric);  
-#endif
 #ifndef WIN32
             GetCurTime( &run_end);
             GetTime( &run_start, &run_end, &usr_t, &sys_t);
@@ -149,11 +140,6 @@ static void test_approx(data_t *massQ, size_t vecsize, size_t qsize, Hierarchica
                 ndcs[i] += (adsampling::tot_full_dist - accum_ndc);
                 recalls[i] = tmp;
                 accum_ndc = adsampling::tot_full_dist;
-                #ifdef DEEP_QUERY
-                #ifndef STAT_QUERY
-                cout << tmp << endl;
-                #endif
-                #endif
                 correct += tmp;
                 cout << 1.0 * q_correct / q_total << ", ";
             }
@@ -606,9 +592,6 @@ int main(int argc, char * argv[]) {
                 + "_ef" + ef_str + "_M" + M_str + "_" + exp_name + ".log" + index_postfix + shuf_postfix + query_postfix;
     #ifdef DEEP_DIVE
     result_path_str += "_deepdive"; 
-    #endif
-    #ifdef DEEP_QUERY
-    result_path_str += "_deepquery";
     #endif
     string groundtruth_path_str;
     if(purpose == 0 || purpose == 1 || purpose == 42) 

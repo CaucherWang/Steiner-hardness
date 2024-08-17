@@ -1,7 +1,6 @@
 #define USE_SIMD
 // #define GET_DELTA
 // #define DEEP_DIVE
-// #define DEEP_QUERY
 // #define STAT_QUERY
 // #define FOCUS_QUERY (8464)
 // #define FOCUS_EF (1000)
@@ -240,9 +239,6 @@ int main(int argc, char * argv[]) {
     string result_path_str = result_base_path_str + "/" + data_str + "/" + result_prefix_str + data_str + "_MRNG_K" + K + "_" + exp_name + ".log" + index_postfix + shuf_postfix + query_postfix;
     #ifdef DEEP_DIVE
     result_path_str += "_deepdive"; 
-    #endif
-    #ifdef DEEP_QUERY
-    result_path_str += "_deepquery";
     #endif
     #ifdef FOCUS_QUERY
     result_path_str += to_string(FOCUS_QUERY);

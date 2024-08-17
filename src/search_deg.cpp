@@ -1,7 +1,6 @@
 #define USE_SIMD
 // #define GET_DELTA
 // #define DEEP_DIVE
-// #define DEEP_QUERY
 // #define STAT_QUERY
 // #define FOCUS_QUERY (8464)
 // #define FOCUS_EF (1000)
@@ -69,19 +68,6 @@ static void test_approx(data_t *massQ, size_t vecsize, size_t qsize, DEG *appr_a
 
     adsampling::clear();
 
-    
-#ifdef DEEP_QUERY
-    indegrees.resize(vecsize, 0);    // internal id
-    for(int i = 0 ; i < vecsize; i++){
-        auto *neighbors = appr_alg->_graph + i * appr_alg->_KG;
-        for(int j = 0; j < appr_alg->_KG; ++j){
-            int id = neighbors[j];
-            if(id == i)  continue;
-            indegrees[id]++;
-        }
-    }
-#endif
-
     vector<long> ndcs(qsize, 0);
     vector<int> recalls(qsize, 0);
     long accum_ndc = 0;
@@ -96,17 +82,7 @@ static void test_approx(data_t *massQ, size_t vecsize, size_t qsize, DEG *appr_a
             struct rusage run_start, run_end;
             GetCurTime( &run_start);
 #endif
-#ifdef DEEP_QUERY
-                std::priority_queue<std::pair<dist_t, int >> gt_(answers[i]);
-                auto result = appr_alg->searchKnnKGraphDEEP_QUERY(massQ + vecdim * i, k, ef, gt_);  
-#elif defined(GET_DELTA)
-                std::priority_queue<std::pair<dist_t, int >> gt_(answers[i]);
-                // get the max distance of gt_
-                float gt_dist = gt_.top().first;
-                auto result = appr_alg->searchKnnKGraph4delta(massQ + vecdim * i, k, ef, gt_dist);
-#else
-                auto result = appr_alg->searchDEG(massQ + vecdim * i, k, ef, metric, -1, ndc_upperbound);  
-#endif
+            auto result = appr_alg->searchDEG(massQ + vecdim * i, k, ef, metric, -1, ndc_upperbound);  
 #ifndef WIN32
             GetCurTime( &run_end);
             GetTime( &run_start, &run_end, &usr_t, &sys_t);
@@ -123,10 +99,8 @@ static void test_approx(data_t *massQ, size_t vecsize, size_t qsize, DEG *appr_a
                 ndcs[i] += metric.ndc;
                 recalls[i] = tmp;
                 accum_ndc = adsampling::tot_full_dist;
-                #ifdef DEEP_QUERY
                 #ifndef STAT_QUERY
                 std::cout << tmp << endl;
-                #endif
                 #endif
                 correct += tmp;   
             }
@@ -432,9 +406,7 @@ int main(int argc, char * argv[]) {
     #ifdef DEEP_DIVE
     result_path_str += "_deepdive"; 
     #endif
-    #ifdef DEEP_QUERY
     result_path_str += "_deepquery";
-    #endif
     #ifdef FOCUS_QUERY
     result_path_str += to_string(FOCUS_QUERY);
     #endif

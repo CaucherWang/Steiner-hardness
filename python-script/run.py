@@ -205,16 +205,16 @@ def preprocess_dataset(
         source_directory,
         paths,
         params, postfix):
-    # print('Building kgraph...')
-    # compile_cmake_file(efanna_directory)
-    # run_file(os.path.join(efanna_directory, 'tests'), 'test_nndescent', [paths['data_path'], paths['kgraph_path'], params['KMRNG'], params['efanna_L'], params['efanna_iter'], params['efanna_S'], params['efanna_R']])
+    print('Building kgraph...')
+    compile_cmake_file(efanna_directory)
+    run_file(os.path.join(efanna_directory, 'tests'), 'test_nndescent', [paths['data_path'], paths['kgraph_path'], params['KMRNG'], params['efanna_L'], params['efanna_iter'], params['efanna_S'], params['efanna_R']])
 
-    # print('Building mrng index...')
-    # compile_file(source_directory, 'index_mrng.cpp', 'index_mrng', ['-ffast-math', '-march=native'])
-    # run_file(source_directory, 'index_mrng', ['-d', paths['data_path'], '-i', paths['mrng_path'], '-g', paths['kgraph_path'], '-k', params['KMRNG'], '-m', 0])
+    print('Building mrng index...')
+    compile_file(source_directory, 'index_mrng.cpp', 'index_mrng', ['-ffast-math', '-march=native'])
+    run_file(source_directory, 'index_mrng', ['-d', paths['data_path'], '-i', paths['mrng_path'], '-g', paths['kgraph_path'], '-k', params['KMRNG'], '-m', 0])
 
-    # print('Building reversed mrng index...')
-    # reverse_mrng_graph(paths)
+    print('Building reversed mrng index...')
+    reverse_mrng_graph(paths)
 
     print('Generating benchmark with GMM...')
     generate_data_and_GMM_model(paths, params['n_components'], params['n_samples'], postfix)
