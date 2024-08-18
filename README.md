@@ -1,16 +1,9 @@
 # [VLDB'25] Query Hardness Measurement and Unbiased Workload Generation for Graph-Based ANN Index Evaluation
 
-This repo provides methods to measure the hardness of queries on graph-based ANN indexes (e.g., HNSW, NSG, KGraph).
+This repo provides methods to 1. *estimate the query cost*, 2. *measure the query hardness* of a given query on graph-based ANN indexes (e.g., HNSW, NSG, KGraph).
 This hardness measure is what we proposed as $Steiner$-hardness in our paper.
-We also provide methods to build unbiased workloads for graph-based ANN index evaluation by generating a query set with the entire spectrum of $Steiner$-hardness.
-We also provide scripts to evaluate the effectiveness of our hardness measure and the unbiased workloads.
-Finally, users can also evaluate their indexes with the unbiased workloads in the codes of this repo.
+You can also build *unbiased workloads* for your dataset to stress-test your indexes.
 
-## Abstract
-
-Graph-based indexes have been widely employed to accelerate approximate similarity search of high-dimensional vectors in various research and industrial fields. 
-However, we observe that evaluations of graph indexes do not pay attention to the query workload distribution, leading to results that are over-optimistic, due to a bias for simple queries. 
-In such cases, even though the average query performance is good, users may suffer from an inconsistent result quality, that is, high-precision results for simple queries, but rather low-precision results for hard queries. To provide an objective and comprehensive evaluation of graph indexes, in this paper, we propose a new approach for building unbiased workloads consisting of queries with different hardness. In order to measure the hardness of queries, we first propose a theoretical framework to estimate the query answering effort in a given graph index. A novel query hardness measure, Steiner -hardness, is then defined by calculating the proposed query effort on a representative MRNG (Monotonic Relative Neighborhood Graph) graph structure. Extensive experiments verify that the proposed query effort estimations accurately profile the real query effort. High correlations between Steiner-hardness and real effort across five graph indexes and six datasets demonstrate its effectiveness as a hardness measure. We also evaluate advanced graph indexes with new unbiased workloads. The new evaluation results can help users not only better understand the performance of graph indexes, but also obtain insights useful for the further development of graph-based indexing methods.
 
 
 ## Prerequisites
@@ -90,15 +83,12 @@ This step includes:
 
 ---
 
-## Build
-There are many entries in this project.
-You can build them directly with g++ 9 or higher.
-Building scripts are provided in folder `script/`
-
-## Usage
-### 0. Get the unbiased workloads
+## Get the unbiased workloads
 
 We've prepared several unbiased workloads for common public ANN datasets. They can be directly downloaded from folder `workloads/`.
+
+
+## Repruduce
 
 ### 1. Compute the Minimum Effort (ME) of queries on given index
 
