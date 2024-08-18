@@ -35,6 +35,8 @@ data/tiny*
 data/test*
 data/webvid*
 data/yandex*
+origin_data/
+python-script/compare.py
 src/*.log
 src/*.o
 *.pkl

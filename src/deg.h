@@ -26,14 +26,14 @@ public:
     void get_rev_graph_and_save_ivecs(const char* filename);
     void search(unsigned ep_id, size_t ef, float* query_data,
             std::priority_queue<std::pair<float, unsigned>, std::vector<std::pair<float, unsigned>>> &result,
-            Metric & metric) ;
+            Metric & metric, int ndc_upperbound) ;
     std::priority_queue<std::pair<float, int >>
-    searchDEG(float *query_data, size_t k, int ef, Metric & metric, int ep = -1);
+    searchDEG(float *query_data, size_t k, int ef, Metric & metric, int ep = -1, int ndc_upperbound = INT_MAX);
 };
 
 void DEG::search(unsigned ep_id, size_t ef, float* query_data,
             std::priority_queue<std::pair<float, unsigned>, std::vector<std::pair<float, unsigned>>> &result,
-            Metric & metric) {
+            Metric & metric, int ndc_upperbound) {
     std::priority_queue<std::pair<float, unsigned>, std::vector<std::pair<float, unsigned>>> candidates;
     float d = fstdistfunc_(query_data, vecs_ + ep_id * dim_, dist_func_param_);
     result.emplace(d, ep_id);
@@ -68,13 +68,19 @@ void DEG::search(unsigned ep_id, size_t ef, float* query_data,
                 if (result.size() > ef)
                     result.pop();
             }
+            if (metric.ndc > ndc_upperbound) {
+                break;
+            }
+        }
+        if (metric.ndc > ndc_upperbound) {
+                break;
         }
     }
     visited_list_pool_->releaseVisitedList(vl);
 }
 
 std::priority_queue<std::pair<float, int >>
-DEG::searchDEG(float *query_data, size_t k, int ef, Metric & metric, int ep) {
+DEG::searchDEG(float *query_data, size_t k, int ef, Metric & metric, int ep, int ndc_upperbound) {
     std::priority_queue<std::pair<float, int >> result;
 
     unsigned entry_point;
@@ -91,7 +97,7 @@ DEG::searchDEG(float *query_data, size_t k, int ef, Metric & metric, int ep) {
     //max heap
     std::priority_queue<std::pair<float, unsigned>, std::vector<std::pair<float, unsigned>>> top_candidates;
 
-    search(currObj, ef, query_data, top_candidates, metric);
+    search(currObj, ef, query_data, top_candidates, metric, ndc_upperbound);
 
     while (top_candidates.size() > k) {
         top_candidates.pop();

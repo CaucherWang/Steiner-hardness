@@ -1,7 +1,6 @@
 #define USE_SIMD
 // #define GET_DELTA
 // #define DEEP_DIVE
-// #define DEEP_QUERY
 // #define STAT_QUERY
 // #define FOCUS_QUERY (8464)
 // #define FOCUS_EF (1000)
@@ -17,6 +16,7 @@
 
 #include "kgraph.h"
 #include <iomanip>
+#include <iostream>
 
 using namespace std;
 using namespace hnswlib;
@@ -60,7 +60,7 @@ int recall(std::priority_queue<std::pair<dist_t, int >> &result, std::priority_q
 
 template<typename data_t, typename dist_t>
 static void test_approx(data_t *massQ, size_t vecsize, size_t qsize, KGraph *appr_alg, size_t vecdim,
-            vector<std::priority_queue<std::pair<dist_t, int >>> &answers, size_t k, int ef) {
+            vector<std::priority_queue<std::pair<dist_t, int >>> &answers, size_t k, int ef, int ndc_upperbound) {
     size_t correct = 0;
     size_t total = 0; 
     long double total_time = 0;
@@ -68,19 +68,6 @@ static void test_approx(data_t *massQ, size_t vecsize, size_t qsize, KGraph *app
     int expr_round = 1;
 
     adsampling::clear();
-
-    
-#ifdef DEEP_QUERY
-    indegrees.resize(vecsize, 0);    // internal id
-    for(int i = 0 ; i < vecsize; i++){
-        auto *neighbors = appr_alg->_graph + i * appr_alg->_KG;
-        for(int j = 0; j < appr_alg->_KG; ++j){
-            int id = neighbors[j];
-            if(id == i)  continue;
-            indegrees[id]++;
-        }
-    }
-#endif
 
     vector<long> ndcs(qsize, 0);
     vector<int> recalls(qsize, 0);
@@ -96,17 +83,7 @@ static void test_approx(data_t *massQ, size_t vecsize, size_t qsize, KGraph *app
             struct rusage run_start, run_end;
             GetCurTime( &run_start);
 #endif
-#ifdef DEEP_QUERY
-                std::priority_queue<std::pair<dist_t, int >> gt_(answers[i]);
-                auto result = appr_alg->searchKnnKGraphDEEP_QUERY(massQ + vecdim * i, k, ef, gt_);  
-#elif defined(GET_DELTA)
-                std::priority_queue<std::pair<dist_t, int >> gt_(answers[i]);
-                // get the max distance of gt_
-                float gt_dist = gt_.top().first;
-                auto result = appr_alg->searchKnnKGraph4delta(massQ + vecdim * i, k, ef, gt_dist);
-#else
-                auto result = appr_alg->searchKnnKGraph(massQ + vecdim * i, k, ef, metric);  
-#endif
+            auto result = appr_alg->searchKnnKGraph(massQ + vecdim * i, k, ef, metric, -1, ndc_upperbound);  
 #ifndef WIN32
             GetCurTime( &run_end);
             GetTime( &run_start, &run_end, &usr_t, &sys_t);
@@ -116,17 +93,14 @@ static void test_approx(data_t *massQ, size_t vecsize, size_t qsize, KGraph *app
 
                 std::priority_queue<std::pair<dist_t, int >> gt(answers[i]);
                 total += gt.size();
+                int q_total = gt.size();
                 int tmp = recall(result, gt);
+                cout << 1.0 * tmp / q_total << ", ";
                 // cout << tmp << ",";
                 // ndcs[i] += (adsampling::tot_full_dist - accum_ndc);
                 ndcs[i] += metric.ndc;
                 recalls[i] = tmp;
                 accum_ndc = adsampling::tot_full_dist;
-                #ifdef DEEP_QUERY
-                #ifndef STAT_QUERY
-                cout << tmp << endl;
-                #endif
-                #endif
                 correct += tmp;   
             }
         }
@@ -157,7 +131,7 @@ static void test_approx(data_t *massQ, size_t vecsize, size_t qsize, KGraph *app
     cout << setprecision(6);
     cout << endl;
     // cout << appr_alg.ef_ << " " << recall * 100.0 << " " << time_us_per_query << " " << adsampling::tot_dimension + adsampling::tot_full_dist * vecdim << endl;
-    cout << ef << " " << recall * 100.0 << " " << time_us_per_query << " ||| nhops: " << hop_per_query
+    cout << ndc_upperbound << " " << recall * 100.0 << " " << time_us_per_query << " ||| nhops: " << hop_per_query
     << " ||| full dist time: " << dist_calc_time << " ||| approx. dist time: " << app_dist_calc_time 
     << " ||| #full dists: " << full_dist_per_query << " ||| #approx. dist: " << approx_dist_per_query 
     << endl << "\t\t" 
@@ -203,7 +177,7 @@ static void test_vs_recall(data_t *massQ, size_t vecsize, size_t qsize,  KGraph 
         // ProfilerStart("../prof/svd-profile.prof");
     for (size_t ef : efs) {
         #ifndef DEEP_DIVE
-        test_approx(massQ, vecsize, qsize, appr_alg, vecdim, answers, k, ef);
+        test_approx(massQ, vecsize, qsize, appr_alg, vecdim, answers, k, ef, 0);
         #else
         test_approx_deep_dive(massQ, vecsize, qsize, appr_alg, vecdim, answers, k, adaptive);
         #endif
@@ -244,7 +218,7 @@ static void test_performance(data_t *massQ, size_t vecsize, size_t qsize, KGraph
             while(lowef < highef){
                 curef = (lowef + highef) / 2;
                 metric.clear();
-                auto result = appr_alg->searchKnnKGraph(massQ + vecdim * i, k, curef, metric);  
+                auto result = appr_alg->searchKnnKGraph(massQ + vecdim * i, k, curef, metric, -1, INT_MAX);  
 
                 std::priority_queue<std::pair<dist_t, int >> gt(answers[i]);
                 tmp = recall(result, gt);
@@ -292,7 +266,7 @@ static void test_performance(data_t *massQ, size_t vecsize, size_t qsize, KGraph
                 curef = highef;
                 metric.clear();
 
-                auto result = appr_alg->searchKnnKGraph(massQ + vecdim * i, k, curef, metric);  
+                auto result = appr_alg->searchKnnKGraph(massQ + vecdim * i, k, curef, metric, -1, INT_MAX);  
                 std::priority_queue<std::pair<dist_t, int >> gt(answers[i]);
                 tmp = recall(result, gt);
                 if(tmp >= lowk){
@@ -305,10 +279,10 @@ static void test_performance(data_t *massQ, size_t vecsize, size_t qsize, KGraph
                 }
             }
         }
-        if(!flag){
-            cerr << i << endl;
-            exit(-1);
-        }
+        // if(!flag){
+        //     cerr << i << endl;
+        //     exit(-1);
+        // }
     }
 
     for(int i = 0; i < qsize; ++i){
@@ -349,20 +323,32 @@ int main(int argc, char * argv[]) {
     //                           1: ADS+       41:LSH+             71: OPQ+ 81:PCA+       TMA optimize (from ADSampling)
     //                                                       62:PQ! 72:OPQ!              QEO optimize (from tau-MNG)
     int method = 0;
-    int purpose = 2;
+    int purpose = 42;
     string data_str = "glove-100";   // dataset name
     string kgraph_od = "_2048";
     int data_type = 0; // 0 for float, 1 for uint8, 2 for int8
     int KG = 500;
     int subk=50;
     float recall = 0.98;
-    string recall_str = to_string(recall).substr(0,4);
+    
 
     while(iarg != -1){
-        iarg = getopt_long(argc, argv, "d:", longopts, &ind);
+        iarg = getopt_long(argc, argv, "d:k:r:", longopts, &ind);
         switch (iarg){
             case 'd':
-                if(optarg)method = atoi(optarg);
+                if(optarg){
+                    data_str = optarg;
+                }
+                break;
+            case 'k':
+                if(optarg){
+                    subk = atoi(optarg);
+                }
+                break;
+            case 'r':
+                if(optarg){
+                    recall = atof(optarg);
+                }
                 break;
         }
     }
@@ -375,12 +361,17 @@ int main(int argc, char * argv[]) {
     string base_path_str = "../data";
     string result_base_path_str = "../results";
     string exp_name;
+    string recall_str = to_string(recall).substr(0,4);
     if(purpose == 1)
         exp_name = "perform_variance" + recall_str;
-    else if(purpose == 2)
+    else if(purpose == 2 || purpose == 41)
         exp_name = "benchmark_perform_variance" + recall_str;
     else if(purpose == 3)
         exp_name = "curve_benchmark" + recall_str;
+    else if (purpose == 4)
+        exp_name = "recall_benchmark" + recall_str;
+    else if (purpose == 42)
+        exp_name = "perform_variance_ndc";
     // string exp_name = "";
     string index_postfix = "_clean";
     string query_postfix = "";
@@ -395,10 +386,13 @@ int main(int argc, char * argv[]) {
     else if(data_type == 2) query_path_str_postfix = ".i8bin";
     query_path_str_postfix = ".fvecs";
     string query_path_str;
-    if(purpose == 0 || purpose == 1)
+    if(purpose == 0 || purpose == 1 || purpose == 42)
         query_path_str = base_path_str + "/" + data_str + "/" + data_str + "_query" + query_path_str_postfix + query_postfix;
-    else if(purpose == 2 || purpose == 3)
+    else if(purpose == 2 || purpose == 3 || purpose == 4)
         query_path_str = base_path_str + "/" + data_str + "/" + data_str + "_benchmark_recall" + recall_str + query_path_str_postfix + query_postfix;
+    else if (purpose == 41) {
+        query_path_str = base_path_str + "/" + data_str + "/" + data_str + "_benchmark_recall0.94" + query_path_str_postfix + query_postfix;
+    }
     // string query_path_str = data_path_str;
     string result_prefix_str = "";
     #ifdef USE_SIMD
@@ -409,15 +403,15 @@ int main(int argc, char * argv[]) {
     #ifdef DEEP_DIVE
     result_path_str += "_deepdive"; 
     #endif
-    #ifdef DEEP_QUERY
-    result_path_str += "_deepquery";
-    #endif
     #ifdef FOCUS_QUERY
     result_path_str += to_string(FOCUS_QUERY);
     #endif
     string groundtruth_path_str;
-    if(purpose == 0 || purpose == 1)
+    if(purpose == 0 || purpose == 1 || purpose == 42)
         groundtruth_path_str = base_path_str + "/" + data_str + "/" + data_str + "_groundtruth.ivecs" + shuf_postfix + query_postfix;
+    else if (purpose == 41) {
+        groundtruth_path_str = base_path_str + "/" + data_str + "/" + data_str + "_benchmark_groundtruth_recall0.94.ivecs" + shuf_postfix + query_postfix;
+    }
     else
         groundtruth_path_str = base_path_str + "/" + data_str + "/" + data_str + "_benchmark_groundtruth_recall" + recall_str + ".ivecs" + shuf_postfix + query_postfix;
     char index_path[256];
@@ -495,8 +489,16 @@ int main(int argc, char * argv[]) {
         // ProfilerStart("../prof/svd-profile.prof");
         if(purpose == 0 || purpose == 3)
             test_vs_recall(Q.data, X.n, Q.n, kgraph, Q.d, answers, subk, method);
-        if(purpose == 1 || purpose == 2)
+        else if(purpose == 1 || purpose == 2 || purpose == 41)
             test_performance(Q.data, X.n, Q.n, kgraph, Q.d, answers, subk, recall);
+        else if (purpose == 4 || purpose == 42) {
+            vector<int> recall_upperbounds = {500, 1000, 2000, 4000, 8000, 16000, 32000, 64000};
+            for (int recall_upperbound : recall_upperbounds) {
+                test_approx(Q.data, X.n, Q.n, kgraph, Q.d, answers, subk, 100000, recall_upperbound);
+                cerr << recall_upperbound << " recall benchmark done" << endl;
+            }
+            
+        }
         // test_approx(Q.data, X.n, Q.n, kgraph, Q.d, answers, subk, FOCUS_EF);
         // ProfilerStop();
 
