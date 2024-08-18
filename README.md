@@ -4,6 +4,9 @@ This repo provides methods to 1. *estimate the query cost*, 2. *measure the quer
 This hardness measure is what we proposed as $Steiner$-hardness in our paper.
 You can also build *unbiased workloads* for your dataset to stress-test your indexes.
 
+## Get the unbiased workloads
+
+We've prepared several unbiased workloads for common public ANN datasets. They can be directly downloaded from folder `workloads/`.
 
 
 ## Prerequisites
@@ -82,11 +85,6 @@ This step includes:
 - Constructing the benchmark
 
 ---
-
-## Get the unbiased workloads
-
-We've prepared several unbiased workloads for common public ANN datasets. They can be directly downloaded from folder `workloads/`.
-
 
 ## Repruduce
 
