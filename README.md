@@ -1,4 +1,4 @@
-# [VLDB'25] Query Hardness Measurement and Unbiased Workload Generation for Graph-Based ANN Index Evaluation
+# [VLDB'25] $Steiner$-Hardness: A Query Hardness Measure for Graph-based ANN Indexes
 
 This repo provides methods to 1. *estimate the query cost*, 2. *measure the query hardness* of a given query on graph-based ANN indexes (e.g., HNSW, NSG, KGraph).
 This hardness measure is what we proposed as $Steiner$-hardness in our paper.
