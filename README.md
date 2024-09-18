@@ -29,6 +29,8 @@ We've prepared several unbiased workloads for common public ANN datasets. They c
 
 2. Clone the Efanna library:
 
+You can clone the efanna library to any location, then you need to input the cloned path into the `efanna_directory` field in the configuration file `config.py`.
+
 ```bash
 git clone https://github.com/ZJULearning/efanna_graph
 ```
@@ -42,7 +44,7 @@ cd python-script
 pip install -r requirements.txt
 ```
 
-### 2. Configure Settings
+### 2. Configuration
 
 Edit the `python-script/config.py` file to set your configurations.
 
