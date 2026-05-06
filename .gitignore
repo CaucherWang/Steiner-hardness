@@ -60,3 +60,4 @@ efanna
 python-script/data/steiner_cache/*
 *.hdf5
 /result
+.cache
