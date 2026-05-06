@@ -6,11 +6,11 @@ pipeline. Intermediate artifacts (MRNG index, reversed graph, ground truth) are
 cached in work_dir so repeated calls with the same data skip the expensive build.
 
 Pipeline:
-  1. Write data/queries to fvecs files (skipped if already present and matching).
-  2. Build KGraph via Efanna (skipped if .efanna file exists).
-  3. Build MRNG index from KGraph (skipped if .mrng file exists).
-  4. Build reversed MRNG graph (skipped if _reversed_std file exists).
-  5. Compute ground truth via compute_gt (skipped if .ivecs file exists).
+  1. Write data to fvecs file (index_mrng needs it on disk).
+  2. Build exact kNN graph with faiss and write in ivecs format (skipped if cached).
+  3. Build MRNG index from kNN graph (skipped if cached).
+  4. Build reversed MRNG graph (skipped if cached).
+  5. Compute ground truth with faiss (skipped if cached).
   6. Run get_delta0_point purpose=0 (delta0 points).
   7. Run get_delta0_point purpose=1 (minimum effort / Steiner hardness).
   8. Return result as numpy int32 array of shape (n_queries,).
@@ -25,18 +25,9 @@ from utils import *
 import faiss
 import numpy as np
 
-# ---------------------------------------------------------------------------
-# Paths to compiled executables and source files.
-# These are resolved relative to this file's location.
-# ---------------------------------------------------------------------------
 _THIS_DIR = Path(__file__).parent
 _SRC_DIR = _THIS_DIR.parent / "src"
-_EFANNA_DIR = Path("/home/dell/efanna_graph")
 
-
-# ---------------------------------------------------------------------------
-# Low-level I/O helpers (mirrors utils.py but without the print noise)
-# ---------------------------------------------------------------------------
 
 
 def _data_fingerprint(data: np.ndarray) -> str:
@@ -54,11 +45,7 @@ def _data_fingerprint(data: np.ndarray) -> str:
 def _compile(src_file: str, exe_name: str, extra_flags=None):
     src = str(_SRC_DIR / src_file)
     exe = str(_SRC_DIR / exe_name)
-    cmd = [
-        "g++", "-o", exe, src,
-        "-I", str(_SRC_DIR),
-        "-O3", "-mavx2", "-fopenmp",
-    ]
+    cmd = ["g++", "-o", exe, src, "-I", str(_SRC_DIR), "-O3", "-mavx2", "-fopenmp"]
     if extra_flags:
         cmd.extend(extra_flags)
     subprocess.run(cmd, check=True)
@@ -66,21 +53,25 @@ def _compile(src_file: str, exe_name: str, extra_flags=None):
 
 def _run(exe_name: str, args):
     exe = str(_SRC_DIR / exe_name)
-    cmd = [exe] + [str(a) for a in args]
-    subprocess.run(cmd, check=True)
+    subprocess.run([exe] + [str(a) for a in args], check=True)
 
 
-def _build_efanna(data_path: str, kgraph_path: str, kmrng: int):
-    """Build KGraph using Efanna test_nndescent."""
-    efanna_tests = str(_EFANNA_DIR / "tests")
-    exe = str(_EFANNA_DIR / "tests" / "test_nndescent")
-    if not os.path.exists(exe):
-        subprocess.run(["cmake", "."], cwd=str(_EFANNA_DIR), check=True)
-        subprocess.run(["make", "-j"], cwd=str(_EFANNA_DIR), check=True)
-    subprocess.run(
-        [exe, data_path, kgraph_path, str(kmrng), "2400", "10", "15", "100"],
-        check=True,
-    )
+def _build_kgraph_faiss(data: np.ndarray, kgraph_path: str, kmrng: int):
+    """
+    Build an exact kNN graph with faiss and write it in the ivecs format that
+    Matrix<int> (matrix.h) expects: each row is [int32 dim, int32 n0, ..., int32 n_{K-1}].
+
+    index_mrng reads the file with Matrix<int>(path) and takes the first KBuild = kmrng-1
+    columns, so we write kmrng columns. The self-neighbor (always column 0 in an exact
+    search) is dropped so every column is a true neighbor.
+    """
+    n, d = data.shape
+    index = faiss.IndexFlatL2(d)
+    index.add(data)
+    _, I = index.search(data, kmrng + 1)
+    I = I[:, 1:].astype(np.int32)          # drop self, shape (n, kmrng)
+    dim_col = np.full(n, kmrng, dtype=np.int32)
+    np.column_stack((dim_col, I)).tofile(kgraph_path)
 
 
 def _build_mrng(data_path: str, mrng_path: str, kgraph_path: str, kmrng: int):
@@ -96,30 +87,24 @@ def _build_mrng(data_path: str, mrng_path: str, kgraph_path: str, kmrng: int):
 def _build_reversed_mrng(mrng_path: str, revg_path: str):
     """
     Build the reversed MRNG graph in the binary format expected by read_rev_graph().
-    Format per node: sequence of uint32 neighbor ids terminated by 0xFFFFFFFF (-1 as uint32).
+    Format per node: sequence of uint32 neighbor ids terminated by 0xFFFFFFFF.
     """
-    # Read MRNG (variable-degree format: each node is [degree, n0, n1, ...] as uint32)
-    data = np.memmap(mrng_path, dtype=np.uint32, mode="r")
-    n_nodes = 0
-    cur = 0
+    raw = np.memmap(mrng_path, dtype=np.uint32, mode="r")
     adjacency = []
-    while cur < len(data):
-        deg = int(data[cur])
-        neighbors = [int(data[cur + 1 + j]) for j in range(deg)]
-        adjacency.append(neighbors)
+    cur = 0
+    while cur < len(raw):
+        deg = int(raw[cur])
+        adjacency.append(raw[cur + 1 : cur + 1 + deg].tolist())
         cur += 1 + deg
-        n_nodes += 1
 
-    # Build reverse adjacency
+    n_nodes = len(adjacency)
     rev = [[] for _ in range(n_nodes)]
     for i, nbrs in enumerate(adjacency):
         for nb in nbrs:
             rev[nb].append(i)
 
-    # Write in the format read_rev_graph() expects:
-    # for each node: uint32 neighbors... then uint32(-1) as sentinel
+    sentinel = struct.pack("<I", 0xFFFFFFFF)
     with open(revg_path, "wb") as f:
-        sentinel = struct.pack("<I", 0xFFFFFFFF)
         for nbrs in rev:
             for nb in nbrs:
                 f.write(struct.pack("<I", nb))
@@ -127,11 +112,10 @@ def _build_reversed_mrng(mrng_path: str, revg_path: str):
 
 
 def _compute_gt(data: np.ndarray, queries: np.ndarray, gt_dim: int, gt_path: str):
-    """Compute exact k-NN ground truth using faiss and write as ivecs."""
-    d = data.shape[1]
-    index = faiss.IndexFlatL2(d)
-    index.add(data.astype(np.float32))
-    _, I = index.search(queries.astype(np.float32), gt_dim)
+    """Compute exact k-NN ground truth with faiss and write as ivecs."""
+    index = faiss.IndexFlatL2(data.shape[1])
+    index.add(data)
+    _, I = index.search(queries, gt_dim)
     write_ivecs(gt_path, I.astype(np.int32))
 
 
@@ -143,7 +127,7 @@ def steiner_hardness(
     data: np.ndarray,
     queries: np.ndarray,
     k: int,
-    work_dir: str = './data/steiner_cache',
+    work_dir: str,
     recall: float = 0.98,
     prob: float = 0.98,
     kmrng: int = 2047,
@@ -181,10 +165,10 @@ def steiner_hardness(
     np.ndarray of int32, shape (n_queries,)
         Steiner hardness (minimum effort) for each query.
     """
-    data = np.ascontiguousarray(data, dtype=np.float32)
+    data    = np.ascontiguousarray(data,    dtype=np.float32)
     queries = np.ascontiguousarray(queries, dtype=np.float32)
     n, d = data.shape
-    nq = queries.shape[0]
+    nq   = queries.shape[0]
 
     if gt_dim is None:
         gt_dim = min(max(k * 10, 1000), n)
@@ -194,13 +178,12 @@ def steiner_hardness(
     work = Path(work_dir)
     work.mkdir(parents=True, exist_ok=True)
 
-    # Use a fingerprint so callers can detect stale caches from different data.
-    fp = _data_fingerprint(data)
-    ds = f"dataset_{fp}"
+    fp   = _data_fingerprint(data)
+    ds   = f"dataset_{fp}"
     base = work / ds
+    base.mkdir(parents=True, exist_ok=True)
 
     data_path   = str(base / f"{ds}_base.fvecs")
-    query_path  = str(base / f"{ds}_query.fvecs")
     kgraph_path = str(base / f"{ds}.efanna")
     mrng_path   = str(base / f"{ds}_K{kmrng}.mrng")
     revg_path   = str(base / f"{ds}_K{kmrng}.mrng_reversed_std")
@@ -211,35 +194,30 @@ def steiner_hardness(
     # expected file is simply {ds}_groundtruth.ivecs.
     gt_path     = str(base / f"{ds}_groundtruth.ivecs")
 
-    recall_s = f"{recall:.2f}"
-    prob_s   = f"{prob:.2f}"
+    recall_s    = f"{recall:.2f}"
+    prob_s      = f"{prob:.2f}"
     delta0_path = str(base / f"{ds}_delta0_forall_point_recall{recall_s}_prob{prob_s}_k{k}_K{kmrng}.ibin_mrng")
     result_path = str(base / f"{ds}_me_exhausted_forall_point_recall{recall_s}_prob{prob_s}_k{k}_K{kmrng}.ibin_mrng")
-
-    base.mkdir(parents=True, exist_ok=True)
 
     def _missing(path):
         return force_rebuild or not os.path.exists(path)
 
-    # Step 1: write data/queries
+    # Step 1: write data to disk (index_mrng reads it directly)
     # if _missing(data_path):
-    #     print(f"[steiner_hardness] Writing data ({n}x{d}) to {data_path}")
+    #     print(f"[steiner_hardness] Writing data ({n}x{d}) ...")
     #     write_fvecs(data_path, data)
-    # if _missing(query_path):
-    #     print(f"[steiner_hardness] Writing queries ({nq}x{d}) to {query_path}")
-    #     write_fvecs(query_path, queries)
 
-    # Step 2: build KGraph
+    # Step 2: build kNN graph with faiss
     if _missing(kgraph_path):
-        print(f"[steiner_hardness] Building KGraph (Efanna) ...")
-        _build_efanna(data_path, kgraph_path, kmrng)
+        print(f"[steiner_hardness] Building kNN graph (faiss, K={kmrng}) ...")
+        _build_kgraph_faiss(data, kgraph_path, kmrng)
 
-    # Step 3: build MRNG
+    # Step 3: build MRNG index
     if _missing(mrng_path):
         print(f"[steiner_hardness] Building MRNG index ...")
         _build_mrng(data_path, mrng_path, kgraph_path, kmrng)
 
-    # Step 4: build reversed MRNG
+    # Step 4: build reversed MRNG graph
     if _missing(revg_path):
         print(f"[steiner_hardness] Building reversed MRNG graph ...")
         _build_reversed_mrng(mrng_path, revg_path)
@@ -250,29 +228,21 @@ def steiner_hardness(
         _compute_gt(data, queries, gt_dim, gt_path)
 
     # Compile get_delta0_point if needed
-    exe_path = str(_SRC_DIR / "get_delta0_point")
-    if not os.path.exists(exe_path):
+    if not os.path.exists(str(_SRC_DIR / "get_delta0_point")):
         print(f"[steiner_hardness] Compiling get_delta0_point ...")
         _compile("get_delta0_point.cpp", "get_delta0_point")
 
-    common_args = [
-        "-d", ds,
-        "-k", k,
-        "-r", recall,
-        "-p", prob,
-        "-m", "13",
-        "-b", str(work),
-        "-l", kmrng,
-    ]
+    common_args = ["-d", ds, "-k", k, "-r", recall, "-p", prob,
+                   "-m", "13", "-b", str(work), "-l", kmrng]
 
-    # Step 6: compute delta0 points (purpose=0)
+    # Step 6: compute delta0 points
     if _missing(delta0_path):
-        print(f"[steiner_hardness] Computing delta0 points (purpose=0) ...")
+        print(f"[steiner_hardness] Computing delta0 points ...")
         _run("get_delta0_point", common_args + ["-o", 0])
 
-    # Step 7: compute minimum effort / Steiner hardness (purpose=1)
+    # Step 7: compute Steiner hardness (minimum effort)
     if _missing(result_path):
-        print(f"[steiner_hardness] Computing Steiner hardness (purpose=1) ...")
+        print(f"[steiner_hardness] Computing Steiner hardness ...")
         _run("get_delta0_point", common_args + ["-o", 1])
 
     return read_ibin_simple(result_path)
