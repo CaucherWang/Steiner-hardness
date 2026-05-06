@@ -24,9 +24,11 @@ from pathlib import Path
 from utils import *
 import faiss
 import numpy as np
+import shutil
 
 _THIS_DIR = Path(__file__).parent
 _SRC_DIR = _THIS_DIR.parent / "src"
+_EFANNA_DIR = _THIS_DIR.parent / "efanna"
 
 
 
@@ -52,8 +54,26 @@ def _compile(src_file: str, exe_name: str, extra_flags=None):
 
 
 def _run(exe_name: str, args):
-    exe = str(_SRC_DIR / exe_name)
-    subprocess.run([exe] + [str(a) for a in args], check=True)
+    if shutil.which(exe_name) is None:
+        exe = str(_SRC_DIR / exe_name)
+    else:
+        exe = exe_name
+    cmd = [exe] + [str(a) for a in args]
+    subprocess.run(cmd, check=True)
+
+
+def _build_efanna(data_path: str, kgraph_path: str, kmrng: int):
+    """Build KGraph using Efanna test_nndescent."""
+    # efanna_tests = str(_EFANNA_DIR / "tests")
+    exe = shutil.which("test_nndescent")
+    if exe is None:
+        exe = str(_EFANNA_DIR / "tests" / "test_nndescent")
+        subprocess.run(["cmake", "."], cwd=str(_EFANNA_DIR), check=True)
+        subprocess.run(["make", "-j"], cwd=str(_EFANNA_DIR), check=True)
+    subprocess.run(
+        [exe, data_path, kgraph_path, str(kmrng), "2400", "10", "15", "100"],
+        check=True,
+    )
 
 
 def _build_kgraph_faiss(data: np.ndarray, kgraph_path: str, kmrng: int):
@@ -75,8 +95,10 @@ def _build_kgraph_faiss(data: np.ndarray, kgraph_path: str, kmrng: int):
 
 
 def _build_mrng(data_path: str, mrng_path: str, kgraph_path: str, kmrng: int):
-    exe = str(_SRC_DIR / "index_mrng")
-    if not os.path.exists(exe):
+    exe = shutil.which("index_mrng")
+    # if not os.path.exists(exe):
+    if exe is None:
+        exe = str(_SRC_DIR / "index_mrng")
         _compile("index_mrng.cpp", "index_mrng", ["-ffast-math", "-march=native"])
     subprocess.run(
         [exe, "-d", data_path, "-i", mrng_path, "-g", kgraph_path, "-k", str(kmrng), "-m", "0"],
@@ -202,15 +224,17 @@ def steiner_hardness(
     def _missing(path):
         return force_rebuild or not os.path.exists(path)
 
-    # Step 1: write data to disk (index_mrng reads it directly)
-    # if _missing(data_path):
-    #     print(f"[steiner_hardness] Writing data ({n}x{d}) ...")
-    #     write_fvecs(data_path, data)
+    # Step 1: write data
+    if _missing(data_path):
+        print(f"[steiner_hardness] Writing data ({n}x{d}) to {data_path}")
+        write_fvecs(data_path, data)
 
     # Step 2: build kNN graph with faiss
     if _missing(kgraph_path):
-        print(f"[steiner_hardness] Building kNN graph (faiss, K={kmrng}) ...")
-        _build_kgraph_faiss(data, kgraph_path, kmrng)
+        # print(f"[steiner_hardness] Building kNN graph (faiss, K={kmrng}) ...")
+        # _build_kgraph_faiss(data, kgraph_path, kmrng)
+        print(f"[steiner_hardness] Building KGraph (Efanna) ...")
+        _build_efanna(data_path, kgraph_path, kmrng)
 
     # Step 3: build MRNG index
     if _missing(mrng_path):
@@ -228,9 +252,11 @@ def steiner_hardness(
         _compute_gt(data, queries, gt_dim, gt_path)
 
     # Compile get_delta0_point if needed
-    if not os.path.exists(str(_SRC_DIR / "get_delta0_point")):
+    exe_path = shutil.which("get_delta0_point")
+    if exe_path is None:
         print(f"[steiner_hardness] Compiling get_delta0_point ...")
         _compile("get_delta0_point.cpp", "get_delta0_point")
+        exe_path = str(_SRC_DIR / "get_delta0_point")
 
     common_args = ["-d", ds, "-k", k, "-r", recall, "-p", prob,
                    "-m", "13", "-b", str(work), "-l", kmrng]
@@ -246,3 +272,20 @@ def steiner_hardness(
         _run("get_delta0_point", common_args + ["-o", 1])
 
     return read_ibin_simple(result_path)
+
+
+if __name__ == "__main__":
+    import h5py
+
+    n = 10000
+
+    with h5py.File("../glove-100-angular.hdf5") as hfp:
+        data = hfp["/train"][:10000]
+        queries = hfp["/test"][:]
+
+    res = steiner_hardness(
+        data, queries, 10, work_dir=".cache"
+    )
+    print(res.shape)
+    print(res / n)
+    
